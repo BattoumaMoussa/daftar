@@ -48,7 +48,8 @@ header.top .sub{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.6
 .fab{position:fixed;left:18px;bottom:96px;width:56px;height:56px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(0,0,0,.2);z-index:20}
 nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 4px calc(8px + env(safe-area-inset-bottom));z-index:30}
 nav.tabs button{flex:1;min-width:0;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--muted);font-size:11px;font-weight:500;white-space:nowrap}
-nav.tabs button .i{font-size:22px;line-height:1}
+nav.tabs button .i{font-size:21px;line-height:1}
+@media (max-width:400px){nav.tabs button{font-size:10px;letter-spacing:-.2px}nav.tabs button .i{font-size:19px}}
 nav.tabs button.on{color:var(--acc);font-weight:700}
 /* stats */
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -233,6 +234,7 @@ table.cmp tr.sec td{background:var(--acc2);color:var(--acc);font-weight:700;text
   <button data-tab="today" class="on"><span class="i">☀️</span>اليوم</button>
   <button data-tab="plan"><span class="i">🗓️</span>المخطط</button>
   <button data-tab="money"><span class="i">💰</span>المصاريف</button>
+  <button data-tab="farm"><span class="i">🌾</span>المزرعة</button>
   <button data-tab="kids"><span class="i">👨‍👩‍👧</span>الأطفال</button>
   <button data-tab="cars"><span class="i">🚙</span>المركبات</button>
   <button data-tab="notes"><span class="i">📝</span>المذكرات</button>
@@ -263,7 +265,7 @@ const COLOR_SWATCH = {none:"var(--card)",green:"#cfe6d8",yellow:"#efe2b0",blue:"
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 /* ---------- storage (on this device) ---------- */
-const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays"];
+const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays","farmp","farml","farmw","farmwl"];
 const S = { data:{}, syncState:"local" };
 COLS.forEach(c=>S.data[c]={});
 const LKEY = "daftar.local.v1", BKEY = "daftar.lastBackup";
@@ -321,7 +323,7 @@ function openSettings(){
 }
 
 /* ---------- state ---------- */
-const UI = { tab:"today", sel:todayKey(), weekOff:0, noteQ:"", planView:"week", month:todayKey().slice(0,7), vv:"cars", veh:null, modT:"all", kid:null, kv:"edu" };
+const UI = { tab:"today", sel:todayKey(), weekOff:0, noteQ:"", planView:"week", month:todayKey().slice(0,7), vv:"cars", veh:null, modT:"all", kid:null, kv:"edu", fv:"sum", fp:"all" };
 const fab = $("#fab");
 
 /* ---------- derived ---------- */
@@ -477,7 +479,7 @@ function editClass(id, defDay){
 /* ---------- money ---------- */
 const CUR = {AED:"درهم", TND:"دينار"};
 const CATS_OUT = [["food","🍞","طعام"],["car","🚗","السيارة"],["bills","🧾","فواتير"],["family","👨‍👩‍👧","العائلة"],["farm","🌱","المزرعة"],["health","💊","صحة"],["edu","📚","تعليم"],["shop","🛍️","مشتريات"],["other","📦","أخرى"]];
-const CATS_IN = [["salary","💼","راتب"],["other_in","➕","دخل آخر"]];
+const CATS_IN = [["salary","💼","راتب"],["farm_in","🌾","مبيعات المزرعة"],["other_in","➕","دخل آخر"]];
 const catOf = k => CATS_OUT.concat(CATS_IN).find(c=>c[0]===k) || ["other","📦","أخرى"];
 const fmtN = new Intl.NumberFormat("en-US",{maximumFractionDigits:2, minimumFractionDigits:0});
 const money = (v,cur) => fmtN.format(v)+" "+(CUR[cur]||cur||"");
@@ -964,6 +966,134 @@ function renderKids(){
    : `<div class="card empty">أضف ملفاً لكل طفل: دراسته ودرجاته، وصحته وتطعيماته وأدويته ومواعيده.<br><br><button class="btn" data-new-kid="1">+ إضافة طفل</button></div>`);
 }
 
+/* ---------- farm ---------- */
+const FLOGK = {irrig:["💧","سقي"], plant:["🌱","غرس / زراعة"], till:["🚜","حراثة"], fert:["🧪","تسميد"], spray:["🐛","رش / مكافحة"], prune:["✂️","تقليم"], harvest:["🧺","حصاد"], sale:["💰","بيع"], maint:["🔧","صيانة / بناء"], buy:["🛒","شراء"], live:["🐑","ماشية"], water:["🚰","المياه / البئر"], note:["📝","ملاحظة"]};
+const farmP = () => Object.entries(S.data.farmp||{}).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(a.created||0)-(b.created||0));
+const farmL = () => Object.entries(S.data.farml||{}).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.created||0)-(a.created||0));
+const farmW = () => Object.entries(S.data.farmw||{}).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(a.created||0)-(b.created||0));
+const farmWL = wid => Object.entries(S.data.farmwl||{}).map(([id,v])=>Object.assign({id},v)).filter(x=>!wid||x.wid===wid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+const pName = id => id==="all"||!id? "عام" : ((S.data.farmp||{})[id]||{}).name || "—";
+const isPlanned = l => l.done===false;
+const P_FIELDS = [
+  {k:"name",l:"اسم القطعة",p:"مثلاً: البطومة 1"},
+  {t:"row",f:[{k:"area",l:"المساحة (هكتار)",num:true},{k:"trees",l:"عدد الأشجار",num:true}]},
+  {t:"row",f:[{k:"crop",l:"المحصول",p:"فستق / زيتون / علف…"},{k:"variety",l:"الصنف",p:"مثلاً: شملالي"}]},
+  {t:"row",f:[{k:"spacing",l:"المسافات",p:"7×7 م"},{k:"planted",l:"تاريخ الغراسة",t:"date"}]},
+  {k:"irrig",l:"الري",t:"chips",o:[["drip","تقطير"],["flood","غمر"],["rain","بعلي"],["none","—"]],d:"none"},
+  {k:"status",l:"الحالة",t:"chips",o:[["planned","مخطط لها"],["active","مزروعة"],["fallow","بور / راحة"]],d:"active"},
+  {k:"notes",l:"ملاحظات",t:"area",p:"التربة، الملوحة، الإحداثيات…"}
+];
+function editParcel(id){
+  const x=id?S.data.farmp[id]:{};
+  formSheet({title:id?"القطعة":"قطعة جديدة", fields:P_FIELDS, obj:x, required:"name",
+    onDelete: id? ()=>confirmSheet("حذف القطعة؟ (سجل أعمالها يبقى)",()=>del("farmp",id)) : null,
+    onSave:o=>put("farmp", id||uid(), Object.assign({},x,o,{created:x.created||Date.now()}))});
+}
+function flogFields(isNew){
+  return [
+   {k:"kind",l:"النوع",t:"chips",o:Object.entries(FLOGK).map(([k,v])=>[k,v[0]+" "+v[1]]),d:"irrig"},
+   {k:"title",l:"الوصف",p:"مثلاً: سقي الزيتون 4 ساعات"},
+   {k:"parcel",l:"القطعة",t:"select",o:[["all","عام / كل المزرعة"]].concat(farmP().map(x=>[x.id,x.name])),d:UI.fp!=="all"?UI.fp:"all"},
+   {t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"qty",l:"الكمية",p:"20 م³ / 3 قناطير / 50 شجرة"}]},
+   {k:"done",l:"تمّ (أزل العلامة إن كان عملاً مخططاً له)",t:"check",d:true},
+   {t:"row",f:[{k:"cost",l:"التكلفة",num:true},{k:"income",l:"الدخل (بيع)",num:true}]},
+   {k:"cur",l:"العملة",t:"chips",o:[["TND","دينار"],["AED","درهم"]],d:"TND"},
+   {t:"row",f:[{k:"workers",l:"عدد العمال",num:true,raw:true},{k:"hours",l:"المدة",p:"يوم / 4 ساعات"}]},
+   {k:"notes",l:"ملاحظات",t:"area"}
+  ].concat(isNew?[{k:"toExp",l:"سجّل التكلفة / الدخل في المصاريف",t:"check",d:true}]:[]);
+}
+function editFlog(id){
+  const x=id?S.data.farml[id]:{date:todayKey()};
+  formSheet({title:id?"تعديل العمل":"عمل جديد في المزرعة", fields:flogFields(!id), obj:x, required:"title",
+    onDelete: id? ()=>confirmSheet("حذف هذا السجل؟",()=>del("farml",id)) : null,
+    onSave:o=>{ const toExp=o.toExp; delete o.toExp; put("farml", id||uid(), Object.assign({},x,o,{created:x.created||Date.now()}));
+      if(!id && toExp && o.done){ const note=(o.parcel&&o.parcel!=="all"?pName(o.parcel)+": ":"")+o.title;
+        if(o.cost>0) put("expenses",uid(),{type:"out",amount:o.cost,cur:o.cur||"TND",cat:"farm",date:o.date||todayKey(),note,created:Date.now()});
+        if(o.income>0) put("expenses",uid(),{type:"in",amount:o.income,cur:o.cur||"TND",cat:"farm_in",date:o.date||todayKey(),note,created:Date.now()+1}); } }});
+}
+const W_FIELDS = [
+  {k:"name",l:"الاسم"},
+  {t:"row",f:[{k:"phone",l:"الهاتف",t:"tel"},{k:"role",l:"العمل",p:"عامل يومي / حارس / سائق"}]},
+  {t:"row",f:[{k:"rate",l:"الأجر اليومي",num:true},{k:"cur",l:"العملة",t:"chips",o:[["TND","دينار"],["AED","درهم"]],d:"TND"}]},
+  {k:"active",l:"الحالة",t:"chips",o:[["yes","يعمل حالياً"],["no","متوقف"]],d:"yes"},
+  {k:"notes",l:"ملاحظات",t:"area"}
+];
+function editWorker(id){
+  const x=id?S.data.farmw[id]:{};
+  formSheet({title:id?"العامل":"عامل جديد", fields:W_FIELDS, obj:x, required:"name",
+    onDelete: id? ()=>confirmSheet("حذف العامل وسجله؟",()=>{ farmWL(id).forEach(r=>del("farmwl",r.id)); del("farmw",id); }) : null,
+    onSave:o=>put("farmw", id||uid(), Object.assign({},x,o,{created:x.created||Date.now()}))});
+}
+function editWlog(id, wid, kind){
+  const x=id?S.data.farmwl[id]:{wid, kind:kind||"work", date:todayKey(), days:1};
+  const w=S.data.farmw[x.wid]||{};
+  const fields = x.kind==="pay"
+    ? [{t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"amount",l:"المبلغ المدفوع",num:true}]},{k:"notes",l:"ملاحظات",t:"area"}].concat(id?[]:[{k:"toExp",l:"سجّله في المصاريف (المزرعة)",t:"check",d:true}])
+    : [{t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"days",l:"عدد الأيام",num:true}]},{k:"amount",l:"المستحق (فارغ = الأيام × الأجر اليومي)",num:true},{k:"task",l:"العمل المنجز",p:"سقي، تقليم…"},{k:"notes",l:"ملاحظات",t:"area"}];
+  formSheet({title:(x.kind==="pay"?"💵 دفعة لـ ":"📅 أيام عمل — ")+esc(w.name||""), fields, obj:x,
+    onDelete: id? ()=>confirmSheet("حذف هذا السجل؟",()=>del("farmwl",id)) : null,
+    onSave:o=>{ const toExp=o.toExp; delete o.toExp;
+      if(x.kind!=="pay" && !(o.amount>0)) o.amount = (o.days||0)*(w.rate||0);
+      put("farmwl", id||uid(), Object.assign({},x,o,{cur:w.cur||"TND",created:x.created||Date.now()}));
+      if(!id && x.kind==="pay" && toExp && o.amount>0) put("expenses",uid(),{type:"out",amount:o.amount,cur:w.cur||"TND",cat:"farm",date:o.date||todayKey(),note:"أجر "+(w.name||"عامل"),created:Date.now()}); }});
+}
+function wBalance(wid){ let due=0, paid=0, days=0; farmWL(wid).forEach(x=>{ if(x.kind==="pay") paid+=x.amount||0; else { due+=x.amount||0; days+=x.days||0; } }); return {due, paid, owed:due-paid, days}; }
+function flogRow(l){
+  const k=FLOGK[l.kind]||FLOGK.note; const pl=isPlanned(l);
+  const meta=[l.date&&fmtShort.format(parseKey(l.date)), UI.fp==="all"?pName(l.parcel):"", l.qty, l.workers?l.workers+" عمال":"", l.hours].filter(Boolean).join(" · ");
+  const right = l.income? `<span class="c" style="color:var(--acc)">+${money(l.income,l.cur)}</span>` : l.cost? `<span class="c">${money(l.cost,l.cur)}</span>` : "";
+  return `<div class="logrow" data-edit-flog="${l.id}" style="${pl?"opacity:.85":""}"><span class="ic">${k[0]}</span><div class="t"><b>${pl?"📌 ":""}${esc(l.title)}</b><div class="meta">${esc(meta)}</div>${l.notes?`<div class="meta">${esc(l.notes.slice(0,120))}</div>`:""}</div>${right}</div>`;
+}
+function farmAlerts(){
+  const t=todayKey(); const out=[];
+  farmL().filter(l=>isPlanned(l) || (!l.done && l.date<=t)).forEach(l=>{ const d=daysTo(l.date); if(d!=null && d<=7) out.push({id:l.id, txt:`${(FLOGK[l.kind]||FLOGK.note)[0]} ${l.title}${l.parcel&&l.parcel!=="all"?" — "+pName(l.parcel):""}`, d}); });
+  return out.sort((a,b)=>a.d-b.d);
+}
+function renderFarm(){
+  const seg=`<div class="seg"><button data-fv="sum" class="${UI.fv==="sum"?"on":""}">ملخص</button><button data-fv="parcels" class="${UI.fv==="parcels"?"on":""}">القطع</button><button data-fv="log" class="${UI.fv==="log"?"on":""}">السجل</button><button data-fv="workers" class="${UI.fv==="workers"?"on":""}">العمال</button></div>`;
+  const P=farmP(), L=farmL(), W=farmW(), t=todayKey(), yr=t.slice(0,4);
+  let body="";
+  if(UI.fv==="sum"){
+    const area=P.reduce((s,x)=>s+(+x.area||0),0), trees=P.reduce((s,x)=>s+(+x.trees||0),0);
+    const cost={}, inc={}; L.filter(l=>(l.date||"").startsWith(yr)&&l.done!==false).forEach(l=>{ if(l.cost) cost[l.cur||"TND"]=(cost[l.cur||"TND"]||0)+l.cost; if(l.income) inc[l.cur||"TND"]=(inc[l.cur||"TND"]||0)+l.income; });
+    W.forEach(w=>farmWL(w.id).filter(x=>x.kind==="pay"&&(x.date||"").startsWith(yr)).forEach(x=>{ cost[x.cur||"TND"]=(cost[x.cur||"TND"]||0)+(x.amount||0); }));
+    const fmtS=o=>Object.keys(o).length?Object.entries(o).map(([c,x])=>money(x,c)).join(" + "):"0";
+    const owed=W.map(w=>({w,b:wBalance(w.id)})).filter(x=>x.b.owed>0);
+    const planned=L.filter(isPlanned).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const lastIrr=P.map(p=>{ const l=L.find(x=>x.kind==="irrig"&&x.parcel===p.id&&x.done!==false&&x.date<=t); return {p, d:l?-daysTo(l.date):null}; }).filter(x=>x.p.irrig&&x.p.irrig!=="rain"&&x.p.irrig!=="none");
+    body=`<div class="stats"><div class="stat"><b>${fmtN.format(area)}</b><span>هكتار</span></div><div class="stat"><b>${P.length}</b><span>قطعة</span></div><div class="stat"><b>${fmtN.format(trees)}</b><span>شجرة</span></div></div>
+    <div class="msum" style="margin-top:12px"><div class="stat out"><b style="font-size:16px">${fmtS(cost)}</b><span>تكاليف ${yr}</span></div><div class="stat"><b style="font-size:16px">${fmtS(inc)}</b><span>مداخيل ${yr}</span></div></div>
+    ${planned.length?`<div class="sec-h"><h2>📌 أعمال مخطط لها</h2></div><div class="card" style="padding:4px 12px">${planned.slice(0,8).map(flogRow).join("")}</div>`:""}
+    ${owed.length?`<div class="sec-h"><h2>💵 مستحقات العمال</h2></div><div class="card" style="padding:4px 12px">${owed.map(({w,b})=>`<div class="logrow" data-wk="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><div class="meta">${b.days} يوم عمل</div></div><span class="c" style="color:var(--warn)">${money(b.owed,w.cur||"TND")}</span></div>`).join("")}</div>`:""}
+    ${lastIrr.length?`<div class="sec-h"><h2>💧 آخر سقي</h2></div><div class="card" style="padding:4px 12px">${lastIrr.map(({p,d})=>`<div class="logrow"><span class="ic">💧</span><div class="t"><b>${esc(p.name)}</b><div class="meta">${p.crop?esc(p.crop):""}</div></div><span class="c" style="${d==null||d>7?"color:var(--warn)":""}">${d==null?"لم يُسجَّل":d===0?"اليوم":"قبل "+ayam(d)}</span></div>`).join("")}</div>`:""}
+    <div class="sec-h"><h2>آخر الأعمال</h2><button class="btn ghost sm" data-fv="log">الكل</button></div>
+    <div class="card" style="padding:4px 12px">${L.filter(l=>!isPlanned(l)).slice(0,6).map(flogRow).join("")||`<div class="empty">سجّل أعمال المزرعة: السقي، الغراسة، التسميد، الحصاد… مع التكلفة والعمال.</div>`}</div>
+    ${P.length?"":`<div class="card empty">ابدأ بإضافة قطع المزرعة من قسم «القطع».<br><br><button class="btn" data-new-parcel="1">+ قطعة</button></div>`}`;
+  } else if(UI.fv==="parcels"){
+    body = P.length? P.map(p=>{ const n=L.filter(l=>l.parcel===p.id).length; const st={planned:"مخطط لها",active:"مزروعة",fallow:"بور"}[p.status||"active"];
+      return `<div class="card"><div class="vcard" data-edit-parcel="${p.id}"><span class="ic">🌳</span><div class="t"><b>${esc(p.name)}</b><span class="small muted">${esc([p.crop,p.variety].filter(Boolean).join(" · "))}</span></div><button class="btn ghost sm">تعديل</button></div>
+      <div class="pills">${p.area?`<span class="pill">📐 ${fmtN.format(p.area)} هـ</span>`:""}${p.trees?`<span class="pill">🌳 ${fmtN.format(p.trees)} شجرة</span>`:""}${p.spacing?`<span class="pill">${esc(p.spacing)}</span>`:""}<span class="pill">${st}</span><span class="pill" data-fp-go="${p.id}" style="cursor:pointer">📋 ${n} سجل ←</span></div></div>`; }).join("")
+      + `<div style="text-align:center"><button class="btn ghost sm" data-new-parcel="1">+ قطعة</button></div>`
+      : `<div class="card empty">أضف قطع المزرعة: المساحة، المحصول والصنف، عدد الأشجار، نوع الري.<br><br><button class="btn" data-new-parcel="1">+ قطعة</button></div>`;
+  } else if(UI.fv==="log"){
+    const F=L.filter(l=>UI.fp==="all"||l.parcel===UI.fp);
+    const planned=F.filter(isPlanned).sort((a,b)=>(a.date||"").localeCompare(b.date||"")), done=F.filter(l=>!isPlanned(l));
+    const months={}; done.forEach(l=>{ const m=(l.date||"").slice(0,7); (months[m]=months[m]||[]).push(l); });
+    body=`<div class="chips" style="margin-bottom:12px"><button class="chip ${UI.fp==="all"?"on":""}" data-fp="all">الكل</button>${P.map(p=>`<button class="chip ${UI.fp===p.id?"on":""}" data-fp="${p.id}">${esc(p.name)}</button>`).join("")}</div>
+    ${planned.length?`<div class="sec-h"><h2>📌 مخطط له</h2></div><div class="card" style="padding:4px 12px">${planned.map(flogRow).join("")}</div>`:""}
+    ${done.length? Object.keys(months).sort().reverse().map(m=>`<div class="dgrp">${m?monthLabel(m):"بدون تاريخ"}</div><div class="card" style="padding:4px 12px">${months[m].map(flogRow).join("")}</div>`).join("") : `<div class="card empty">لا أعمال مسجلة${UI.fp!=="all"?" لهذه القطعة":""}. اضغط + لتسجيل عمل.</div>`}`;
+  } else {
+    body = W.length? W.map(w=>{ const b=wBalance(w.id); const R=farmWL(w.id).slice(0,5);
+      return `<div class="card" style="${w.active==="no"?"opacity:.6":""}"><div class="vcard" data-edit-worker="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><span class="small muted">${esc([w.role, w.rate&&money(w.rate,w.cur||"TND")+" / يوم", w.phone].filter(Boolean).join(" · "))}</span></div></div>
+      <div class="pills"><span class="pill">📅 ${b.days} يوم</span><span class="pill">مستحق ${money(b.due,w.cur||"TND")}</span><span class="pill">مدفوع ${money(b.paid,w.cur||"TND")}</span><span class="pill ${b.owed>0?"warn":""}">الباقي ${money(b.owed,w.cur||"TND")}</span></div>
+      <div style="display:flex;gap:6px;margin-top:10px"><button class="btn ghost sm" data-wl-work="${w.id}">+ أيام عمل</button><button class="btn ghost sm" data-wl-pay="${w.id}">💵 دفعة</button></div>
+      ${R.length?`<div style="margin-top:6px">${R.map(x=>`<div class="logrow" data-edit-wl="${x.id}"><span class="ic">${x.kind==="pay"?"💵":"📅"}</span><div class="t"><b>${x.kind==="pay"?"دفعة":ayam(x.days||0)+(x.task?" — "+esc(x.task):"")}</b><div class="meta">${x.date?fmtShort.format(parseKey(x.date)):""}</div></div><span class="c" style="${x.kind==="pay"?"color:var(--acc)":""}">${money(x.amount||0,x.cur||"TND")}</span></div>`).join("")}</div>`:""}</div>`; }).join("")
+      + `<div style="text-align:center"><button class="btn ghost sm" data-new-worker="1">+ عامل</button></div>`
+      : `<div class="card empty">تابع أيام عمل كل عامل وأجره وما دفعته له وما بقي.<br><br><button class="btn" data-new-worker="1">+ عامل</button></div>`;
+  }
+  return headerHTML("المزرعة","البطومة — تطاوين") + seg + body;
+}
+
 function renderToday(){
   const k=todayKey(), d=new Date();
   const sub = `${DAYS[d.getDay()]} ${fmtG.format(d)}${fmtH?"<br>"+fmtH.format(d):""}`;
@@ -983,6 +1113,7 @@ function renderToday(){
     <div class="stat"><b>${Object.keys(S.data.notes).length}</b><span>مذكرة</span></div>
   </div>
   ${(()=>{const lb=lastBackupDays(); const n=countItems(); return n>=5 && (lb==null||lb>=14)?`<div class="card" style="display:flex;align-items:center;gap:10px;border-color:var(--gold)"><span style="font-size:22px">💾</span><div style="flex:1" class="small">${lb==null?"لم تأخذ نسخة احتياطية بعد.":"آخر نسخة احتياطية قبل "+lb+" يوم."} بياناتك على هذا الهاتف فقط.</div><button class="btn sm" id="bkNow">نسخة الآن</button></div>`:"";})()}
+  ${(()=>{const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-edit-flog="${a.id}"><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
   ${(()=>{const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${(()=>{const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${todayHol?holBanner(todayHol):""}
@@ -1072,7 +1203,7 @@ function render(){
   if(window.__dlocked) return;
   const app=$("#app"); const y=window.scrollY;
   const focusQ = document.activeElement && document.activeElement.id==="noteQ";
-  app.innerHTML = UI.tab==="today"?renderToday():UI.tab==="plan"?renderPlan():UI.tab==="notes"?renderNotes():UI.tab==="money"?renderMoney():UI.tab==="cars"?renderCars():UI.tab==="kids"?renderKids():renderPrograms();
+  app.innerHTML = UI.tab==="today"?renderToday():UI.tab==="plan"?renderPlan():UI.tab==="notes"?renderNotes():UI.tab==="money"?renderMoney():UI.tab==="cars"?renderCars():UI.tab==="kids"?renderKids():UI.tab==="farm"?renderFarm():renderPrograms();
   setSync();
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===UI.tab));
   if(focusQ){ const i=$("#noteQ"); i.focus(); i.setSelectionRange(i.value.length,i.value.length); }
@@ -1174,7 +1305,8 @@ function addSamples(){
 
 /* ---------- events ---------- */
 $("#tabs").onclick=e=>{ const b=e.target.closest("button"); if(!b) return; if(UI.tab==="cars" && b.dataset.tab==="cars") UI.veh=null; if(UI.tab==="kids" && b.dataset.tab==="kids") UI.kid=null; UI.tab=b.dataset.tab; if(UI.tab==="plan") UI.sel=UI.sel||todayKey(); window.scrollTo(0,0); render(); };
-fab.onclick=()=>{ if(UI.tab==="kids"){ if(UI.kid && S.data.kids[UI.kid]){ if(UI.kv==="info") editKid(UI.kid); else pickKrec(UI.kid, UI.kv); } else editKid(); return; }
+fab.onclick=()=>{ if(UI.tab==="farm"){ if(UI.fv==="parcels") editParcel(); else if(UI.fv==="workers") editWorker(); else editFlog(); return; }
+  if(UI.tab==="kids"){ if(UI.kid && S.data.kids[UI.kid]){ if(UI.kv==="info") editKid(UI.kid); else pickKrec(UI.kid, UI.kv); } else editKid(); return; }
   if(UI.tab==="cars"){ if(UI.vv==="cmp") editCand(); else if(UI.vv==="mods") editMod(); else if(UI.veh && S.data.vehicles[UI.veh]) editLog(null,UI.veh); else editVehicle(); return; }
   if(UI.tab==="notes") editNote(); else if(UI.tab==="programs") editRoutine(); else if(UI.tab==="money") editExpense();
   else if(UI.tab==="plan" && UI.planView==="classes") editClass(null,"");
@@ -1206,6 +1338,18 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-day]")){ UI.sel=b.dataset.day; render(); return; }
   if(b=g("[data-week]")){ const v=+b.dataset.week; UI.weekOff = v===0?0:UI.weekOff+v; UI.sel = v===0?todayKey():keyOf(weekStart(UI.weekOff)); render(); return; }
   if(b=g("[data-pv]")){ UI.planView=b.dataset.pv; render(); return; }
+  if(b=g("[data-fv]")){ UI.fv=b.dataset.fv; render(); return; }
+  if(b=g("[data-fp-go]")){ UI.fp=b.dataset.fpGo; UI.fv="log"; render(); return; }
+  if(b=g("[data-fp]")){ UI.fp=b.dataset.fp; render(); return; }
+  if(b=g("[data-edit-parcel]")){ editParcel(b.dataset.editParcel); return; }
+  if(g("[data-new-parcel]")){ editParcel(); return; }
+  if(b=g("[data-edit-flog]")){ editFlog(b.dataset.editFlog); return; }
+  if(b=g("[data-edit-worker]")){ editWorker(b.dataset.editWorker); return; }
+  if(g("[data-new-worker]")){ editWorker(); return; }
+  if(b=g("[data-wl-work]")){ editWlog(null,b.dataset.wlWork,"work"); return; }
+  if(b=g("[data-wl-pay]")){ editWlog(null,b.dataset.wlPay,"pay"); return; }
+  if(b=g("[data-edit-wl]")){ editWlog(b.dataset.editWl); return; }
+  if(b=g("[data-wk]")){ UI.tab="farm"; UI.fv="workers"; render(); return; }
   if(b=g("[data-goto]")){ UI.tab=b.dataset.goto; window.scrollTo(0,0); render(); return; }
   if(b=g("[data-kid]")){ UI.tab="kids"; UI.kid=b.dataset.kid; window.scrollTo(0,0); render(); return; }
   if(g("#kidBack")){ UI.kid=null; render(); return; }
