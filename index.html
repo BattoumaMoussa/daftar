@@ -988,7 +988,7 @@ const farmWL = wid => Object.entries(S.data.farmwl||{}).map(([id,v])=>Object.ass
 const pName = id => id==="all"||!id? "عام" : ((S.data.farmp||{})[id]||{}).name || "—";
 const isPlanned = l => l.done===false;
 const P_FIELDS = [
-  {k:"name",l:"اسم القطعة",p:"مثلاً: البطومة 1"},
+  {k:"name",l:"اسم القطعة",p:"مثلاً: القطعة الشمالية"},
   {t:"row",f:[{k:"area",l:"المساحة (هكتار)",num:true},{k:"trees",l:"عدد الأشجار",num:true}]},
   {t:"row",f:[{k:"crop",l:"المحصول",p:"فستق / زيتون / علف…"},{k:"variety",l:"الصنف",p:"مثلاً: شملالي"}]},
   {t:"row",f:[{k:"spacing",l:"المسافات",p:"7×7 م"},{k:"planted",l:"تاريخ الغراسة",t:"date"}]},
@@ -1078,7 +1078,7 @@ const stableOpts=()=>[["","—"]].concat(fitems("stable").map(x=>[x.id,x.name]))
 const parcelOpts=()=>[["","—"]].concat(farmP().map(x=>[x.id,x.name]));
 const FSEC = {
   trees:{ic:"🌳",l:"الأشجار",count:"count",countL:"شجرة",
-    f:()=>[{k:"name",l:"المجموعة",p:"مثلاً: فستق البطومة"},{k:"parcel",l:"القطعة",t:"select",o:parcelOpts()},{t:"row",f:[{k:"species",l:"النوع",p:"فستق / زيتون / تين"},{k:"variety",l:"الصنف",p:"ماطر / شملالي"}]},{t:"row",f:[{k:"count",l:"العدد الأولي",num:true},{k:"planted",l:"تاريخ الغراسة",t:"date"}]},{t:"row",f:[{k:"spacing",l:"المسافات",p:"7×7 م"},{k:"rootstock",l:"الأصل (الطعم)"}]},{k:"notes",l:"ملاحظات",t:"area"}],
+    f:()=>[{k:"name",l:"المجموعة",p:"مثلاً: زيتون القطعة 1"},{k:"parcel",l:"القطعة",t:"select",o:parcelOpts()},{t:"row",f:[{k:"species",l:"النوع",p:"فستق / زيتون / تين"},{k:"variety",l:"الصنف",p:"ماطر / شملالي"}]},{t:"row",f:[{k:"count",l:"العدد الأولي",num:true},{k:"planted",l:"تاريخ الغراسة",t:"date"}]},{t:"row",f:[{k:"spacing",l:"المسافات",p:"7×7 م"},{k:"rootstock",l:"الأصل (الطعم)"}]},{k:"notes",l:"ملاحظات",t:"area"}],
     sub:x=>[x.species,x.variety,x.parcel&&pName(x.parcel)],
     ev:{plant:["🌱","غرس / تعويض",1],dead:["🥀","موت / قلع",-1],prune:["✂️","تقليم"],graft:["🔗","تطعيم"],treat:["💊","رش / علاج"],fert:["🧪","تسميد"],harvest:["🧺","جني",0],note:["📝","ملاحظة"]}},
   seed:{ic:"🌿",l:"الشتلات",count:"qty",countL:"في المشتل",
@@ -1254,12 +1254,21 @@ function renderRemote(){
   <div class="card" style="opacity:.75"><b>⚡ التشغيل المباشر</b><p class="small muted" style="margin:6px 0 0">سيُفعّل بعد اختيار وحدة التحكم وتركيبها: تشغيل/إيقاف كل قطاع، وتشغيل المضخة، ورؤية حالة الري.</p></div>`;
 }
 
+function farmHeader(){
+  const st=settings();
+  return headerHTML(esc(st.farmName||"المزرعة"), `${st.farmPlace?esc(st.farmPlace)+" ":""}<button class="icon-btn" id="farmName" style="font-size:13px;color:var(--acc);padding:2px 4px">✎ ${st.farmName?"تعديل":"اسم المزرعة ومكانها"}</button>`);
+}
+function editFarmName(){
+  const st=settings();
+  formSheet({title:"🌾 اسم المزرعة", fields:[{k:"farmName",l:"اسم المزرعة",p:"مثلاً: مزرعة الزيتون"},{k:"farmPlace",l:"المكان",p:"المنطقة — الولاية"}], obj:st,
+    onSave:o=>put("settings","main",Object.assign({},settings(),{farmName:o.farmName,farmPlace:o.farmPlace}))});
+}
 function renderFarm(){
   const NAV=[["sum","📊 ملخص"],["parcels","🗺️ القطع"],["log","📋 السجل"],["well","🚰 البئر"],["remote","📡 التحكم عن بعد"]].concat(Object.entries(FSEC).map(([k,v])=>[k,v.ic+" "+v.l])).concat([["workers","👷 العمال"]]);
   const seg=`<div class="fnav" id="fnav">${NAV.map(([k,l])=>`<button class="chip ${UI.fv===k?"on":""}" data-fv="${k}">${l}</button>`).join("")}</div>`;
-  if(UI.fv==="well") return headerHTML("المزرعة","البطومة — تطاوين") + seg + renderWell();
-  if(UI.fv==="remote") return headerHTML("المزرعة","البطومة — تطاوين") + seg + renderRemote();
-  if(FSEC[UI.fv]) return headerHTML("المزرعة","البطومة — تطاوين") + seg + (UI.fitem && S.data.fitem[UI.fitem] ? renderFItem(UI.fitem) : renderFSec(UI.fv));
+  if(UI.fv==="well") return farmHeader() + seg + renderWell();
+  if(UI.fv==="remote") return farmHeader() + seg + renderRemote();
+  if(FSEC[UI.fv]) return farmHeader() + seg + (UI.fitem && S.data.fitem[UI.fitem] ? renderFItem(UI.fitem) : renderFSec(UI.fv));
   const P=farmP(), L=farmL(), W=farmW(), t=todayKey(), yr=t.slice(0,4);
   let body="";
   if(UI.fv==="sum"){
@@ -1303,7 +1312,7 @@ function renderFarm(){
       + `<div style="text-align:center"><button class="btn ghost sm" data-new-worker="1">+ عامل</button></div>`
       : `<div class="card empty">تابع أيام عمل كل عامل وأجره وما دفعته له وما بقي.<br><br><button class="btn" data-new-worker="1">+ عامل</button></div>`;
   }
-  return headerHTML("المزرعة","البطومة — تطاوين") + seg + body;
+  return farmHeader() + seg + body;
 }
 
 function renderToday(){
@@ -1556,6 +1565,7 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-pv]")){ UI.planView=b.dataset.pv; render(); return; }
   if(b=g("[data-fitem]")){ UI.tab="farm"; if(b.dataset.fsec) UI.fv=b.dataset.fsec; UI.fitem=b.dataset.fitem; window.scrollTo(0,0); render(); return; }
   if(g("[data-fitem-back]")){ UI.fitem=null; render(); return; }
+  if(g("#farmName")){ editFarmName(); return; }
   if(b=g("[data-fv]")){ UI.fv=b.dataset.fv; UI.fitem=null; render(); const n=$("#fnav .chip.on"); if(n) n.scrollIntoView({inline:"center",block:"nearest"}); return; }
   if(b=g("[data-new-fitem]")){ editFItem(b.dataset.newFitem); return; }
   if(b=g("[data-edit-fitem]")){ const x=S.data.fitem[b.dataset.editFitem]; if(x) editFItem(x.sec,b.dataset.editFitem); return; }
