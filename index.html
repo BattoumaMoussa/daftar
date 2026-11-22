@@ -1334,7 +1334,7 @@ const SAT_URL=(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/Wor
 function mercPx(lon,lat,z){ const s=256*Math.pow(2,z); const r=Math.max(-85,Math.min(85,lat))*Math.PI/180; return [(lon+180)/360*s, (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*s]; }
 function renderMap(){
   const all=farmP(), P=all.filter(p=>Array.isArray(p.geo)&&p.geo.length>=3), none=all.filter(p=>!(Array.isArray(p.geo)&&p.geo.length>=3));
-  const imp=`<label class="btn sm" style="display:inline-block">📥 استيراد KML / KMZ / GeoJSON<input type="file" id="mapImp" accept=".kml,.kmz,.geojson,.json" hidden></label>`;
+  const imp=`<label class="btn sm" style="display:inline-block">📥 استيراد KML / KMZ / GeoJSON<input type="file" id="mapImp" hidden></label>`;
   if(!P.length) return `<div class="card empty">ارسم حدود قطعك في Google Earth أو QGIS، ثم احفظها كملف KML أو KMZ واستوردها هنا، فتظهر خريطة المزرعة بالقطع ومساحاتها المحسوبة.<br><br>${imp}</div>`;
   let x0=180,x1=-180,y0=90,y1=-90; P.forEach(p=>p.geo.forEach(([x,y])=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }));
   const sat=SAT_OK && settings().mapSat!==false;
