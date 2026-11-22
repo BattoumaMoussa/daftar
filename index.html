@@ -116,6 +116,7 @@ nav.tabs button.on{color:var(--acc);font-weight:700}
 .sheet{background:var(--card);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));animation:up .18s ease-out}
 @keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
 .sheet h2{margin:0 0 12px;font-size:18px}
+.sheet .actions{position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom));background:var(--card);margin:8px -16px calc(-18px - env(safe-area-inset-bottom));padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);z-index:3}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
 .inp{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;outline:none}
@@ -1212,9 +1213,13 @@ function render(){
 
 /* ---------- sheets ---------- */
 let sheetLocked=false;
-function openSheet(html, locked){ sheetLocked=!!locked; $("#sheet").innerHTML=html; $("#ov").classList.add("show"); }
-function closeSheet(force){ if(sheetLocked && force!==true) return; sheetLocked=false; $("#ov").classList.remove("show"); $("#sheet").innerHTML=""; render(); }
-$("#ov").addEventListener("click",e=>{ if(e.target.id==="ov") closeSheet(); });
+let ignorePop=false;
+function openSheet(html, locked){ sheetLocked=!!locked; $("#sheet").innerHTML=html; $("#sheet").scrollTop=0; $("#ov").classList.add("show");
+  try{ if(!(history.state&&history.state.sheet)) history.pushState({sheet:1},""); }catch(e){} }
+function closeSheet(force){ if(sheetLocked && force!==true) return; sheetLocked=false; $("#ov").classList.remove("show"); $("#sheet").innerHTML=""; render();
+  try{ if(history.state&&history.state.sheet){ ignorePop=true; history.back(); } }catch(e){} }
+window.addEventListener("popstate",()=>{ if(ignorePop){ ignorePop=false; return; } if($("#ov").classList.contains("show")){ if(sheetLocked){ try{ history.pushState({sheet:1},""); }catch(e){} return; } closeSheet(); } });
+$("#ov").addEventListener("click",e=>{ if(e.target.id==="ov" && !$("#sheet").querySelector("input:not([type=checkbox]),textarea,select")) closeSheet(); });
 function confirmSheet(msg, onYes){
   openSheet(`<h2>${esc(msg)}</h2><div class="actions"><button class="btn ghost" id="cNo">إلغاء</button><button class="btn" style="background:var(--warn)" id="cYes">حذف</button></div>`);
   $("#cNo").onclick=closeSheet; $("#cYes").onclick=()=>{ closeSheet(); onYes(); };
@@ -1428,7 +1433,6 @@ function setLockFails(o){ try{ localStorage.setItem(LOCKF_KEY,JSON.stringify(o))
 function lockNow(){
   if(!LK || window.__dlocked) return;
   window.__dlocked=true; document.body.classList.add("locked"); $("#app").innerHTML="";
-  try{ if(!sheetLocked) closeSheet(true); }catch(e){}
   lkEntry=""; drawLock();
   if(LK.bio && !document.hidden) setTimeout(tryBio, 350);
 }
