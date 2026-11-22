@@ -193,6 +193,12 @@ table.cmp tr.sec td{background:var(--acc2);color:var(--acc);font-weight:700;text
 .modrow .meta{font-size:12px;color:var(--muted)}
 .chk-line{display:flex;align-items:center;gap:8px;font-size:14px;margin:4px 0 10px}
 .chk-line input{width:20px;height:20px;accent-color:var(--acc)}
+.day.hol{background:#fbf3d6;border-color:#efe2b0}
+@media (prefers-color-scheme:dark){.day.hol{background:#3a331b;border-color:#4d4426}}
+.day.hol.sel{background:var(--acc);border-color:var(--acc)}
+.holbanner{display:flex;gap:12px;align-items:center;background:#fbf3d6;border:1px solid #efe2b0;border-radius:var(--r);padding:14px;margin-bottom:12px}
+@media (prefers-color-scheme:dark){.holbanner{background:#3a331b;border-color:#4d4426}}
+.holbanner .e{font-size:28px}.holbanner b{display:block}
 .day-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:2px 0 4px}
 /* money */
 .mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -257,7 +263,7 @@ const COLOR_SWATCH = {none:"var(--card)",green:"#cfe6d8",yellow:"#efe2b0",blue:"
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 /* ---------- storage (on this device) ---------- */
-const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec"];
+const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays"];
 const S = { data:{}, syncState:"local" };
 COLS.forEach(c=>S.data[c]={});
 const LKEY = "daftar.local.v1", BKEY = "daftar.lastBackup";
@@ -379,15 +385,57 @@ function classList(list, isToday){
       <div class="bd" style="border-inline-start-color:${k.c}"><div class="ttl">${esc(c.title)}</div><div class="meta">${k.l}${c.room?" · "+esc(c.room):""}</div></div>${badge}</div>`;
   }).join("");
 }
+/* ---------- holidays ---------- */
+const HOLK = {off:["🏖️","عطلة رسمية — لا دوام"], nostudents:["📚","لا دراسة للطلبة — دوام للكادر"], break:["🌴","إجازة"]};
+const holidays = () => Object.entries(S.data.holidays||{}).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(a.from||"").localeCompare(b.from||""));
+function holidayOn(k){ return holidays().find(x=>x.from && x.from<=k && k<=(x.to||x.from)) || null; }
+function nextHoliday(k){ return holidays().find(x=>x.from>k) || null; }
+function holRange(x){ const a=parseKey(x.from), b=parseKey(x.to||x.from); return (x.to&&x.to!==x.from)? fmtShort.format(a)+" – "+fmtShort.format(b) : fmtShort.format(a); }
+function holBanner(x){ const k=HOLK[x.kind]||HOLK.off; return `<div class="holbanner"><span class="e">${k[0]}</span><div><b>${esc(x.title)}</b><span class="small muted">${k[1]} · ${holRange(x)}</span></div></div>`; }
+const HOL_FIELDS = [
+  {k:"title",l:"الاسم",p:"مثلاً: عطلة عيد الفطر"},
+  {t:"row",f:[{k:"from",l:"من",t:"date"},{k:"to",l:"إلى (اختياري)",t:"date"}]},
+  {k:"kind",l:"النوع",t:"chips",o:Object.entries(HOLK).map(([k,v])=>[k,v[0]+" "+v[1]]),d:"off"},
+  {k:"notes",l:"ملاحظات",t:"area"}
+];
+function editHoliday(id){
+  const x = id? S.data.holidays[id] : {};
+  formSheet({title:id?"تعديل العطلة":"عطلة / إجازة جديدة", fields:HOL_FIELDS, obj:x, required:"title",
+    onDelete: id? ()=>confirmSheet("حذف هذه العطلة؟",()=>del("holidays",id)) : null,
+    onSave:o=>{ if(!o.from){ toast("حدّد تاريخ البداية"); return; } if(o.to && o.to<o.from){ const t=o.to; o.to=o.from; o.from=t; } put("holidays", id||uid(), Object.assign({},x,o)); }});
+}
+const MOE_2026_27 = [
+  ["moe27-mid1","إجازة منتصف الفصل الأول","2026-10-12","2026-10-16","nostudents","للطلبة 12–16 أكتوبر؛ للكادر 15–16 أكتوبر"],
+  ["moe27-natday","عطلة عيد الاتحاد (اليوم الوطني)","2026-12-02","2026-12-04","off",""],
+  ["moe27-win1","إجازة الشتاء للطلبة — تدريب الكادر واختبارات الإعادة","2026-12-14","2026-12-18","nostudents","التدريب التخصصي 3 واختبارات إعادة الفصل الأول"],
+  ["moe27-win2","إجازة الشتاء","2026-12-21","2027-01-01","off","استئناف الدراسة 4 يناير 2027"],
+  ["moe27-fitr","عطلة عيد الفطر","2027-03-08","2027-03-12","off","التواريخ قد تتغير حسب الإعلان الرسمي ورؤية الهلال"],
+  ["moe27-spring","إجازة الربيع","2027-04-05","2027-04-09","off","استئناف الدراسة 12 أبريل 2027"],
+  ["moe27-adha","عطلة عيد الأضحى","2027-05-15","2027-05-18","off","التواريخ قد تتغير حسب الإعلان الرسمي ورؤية الهلال"],
+  ["moe27-hijri","رأس السنة الهجرية","2027-06-06","2027-06-06","off","قد يتغير حسب الإعلان الرسمي"],
+  ["moe27-endst","نهاية العام للطلبة — دوام الكادر","2027-07-05","2027-07-09","nostudents","آخر يوم للطلبة 2 يوليو؛ اختبارات الإعادة 5–8 يوليو"],
+  ["moe27-summer","الإجازة الصيفية","2027-07-12","2027-08-27","off","بداية إجازة الكادر 12 يوليو؛ عودة الطلبة 30 أغسطس 2027"],
+];
+function seedMoe(){ let n=0; MOE_2026_27.forEach(([id,t,f,to,k,nt])=>{ if(!S.data.holidays[id]){ put("holidays",id,{title:t,from:f,to,kind:k,notes:nt,src:"moe"}); n++; } }); toast(n? "أُضيف تقويم الوزارة ("+n+")" : "التقويم مضاف من قبل"); }
+function renderHolidays(){
+  const t=todayKey(); const L=holidays(); const up=L.filter(x=>(x.to||x.from)>=t), past=L.filter(x=>(x.to||x.from)<t);
+  const row=x=>{ const k=HOLK[x.kind]||HOLK.off; const d=daysTo(x.from); return `<div class="logrow" data-edit-hol="${x.id}"><span class="ic">${k[0]}</span><div class="t"><b>${esc(x.title)}</b><div class="meta">${holRange(x)} · ${k[1]}${d>0?" · بعد "+ayam(d):x.from<=t?" · جارية الآن":""}</div>${x.notes?`<div class="meta">${esc(x.notes)}</div>`:""}</div></div>`; };
+  return `<div class="sec-h"><h2>🏖️ العطل والإجازات</h2><button class="btn ghost sm" data-new-hol="1">+ عطلة</button></div>
+  <div class="card" style="padding:4px 12px">${up.length?up.map(row).join(""):`<div class="empty">في أيام العطل لا تظهر الحصص والمناوبات في «اليوم» ولا في المخطط.</div>`}</div>
+  ${L.some(x=>x.src==="moe")?"":`<div style="text-align:center;margin:-4px 0 10px"><button class="btn sm" id="seedMoe">+ تقويم وزارة التربية 2026–2027</button></div>`}
+  ${past.length?`<details style="margin-bottom:10px"><summary class="small muted">العطل السابقة (${past.length})</summary><div class="card" style="padding:4px 12px;margin-top:6px">${past.map(row).join("")}</div></details>`:""}`;
+}
+
 function renderClassesWeek(){
   const all=classes();
   const days=[1,2,3,4,5,6,0].filter(d=>SCHOOL_DAYS.includes(d) || all.some(c=>c.day===d));
-  const tw=new Date().getDay();
-  return `${all.length?"":`<div class="card empty">أدخل جدول حصصك ومناوباتك مرة واحدة، وسيظهر لك كل يوم في صفحة «اليوم» مع الحصة الحالية والتالية.</div>`}
+  const tw=new Date().getDay(); const hNow=holidayOn(todayKey());
+  return `${hNow?holBanner(hNow):""}${all.length?"":`<div class="card empty">أدخل جدول حصصك ومناوباتك مرة واحدة، وسيظهر لك كل يوم في صفحة «اليوم» مع الحصة الحالية والتالية.</div>`}
   ${days.map(d=>{const l=classesOnWd(d);
     return `<div class="card"><div class="day-h"><span>${DAYS[d]}${d===tw?' <span class="small" style="color:var(--acc)">· اليوم</span>':""}</span><span><span class="small muted">${l.length?l.length+" ":""}</span><button class="btn ghost sm" data-new-cls="${d}">+ إضافة</button></span></div>
     ${l.length?classList(l,false):`<div class="small muted" style="padding:6px 0">لا شيء</div>`}</div>`;}).join("")}
-  <div style="text-align:center;margin:6px 0 4px"><button class="btn ghost sm" data-new-cls="">+ إضافة لأيام متعددة</button></div>`;
+  <div style="text-align:center;margin:6px 0 4px"><button class="btn ghost sm" data-new-cls="">+ إضافة لأيام متعددة</button></div>
+  ${renderHolidays()}`;
 }
 function editClass(id, defDay){
   const c = id? S.data.classes[id] : null;
@@ -925,7 +973,8 @@ function renderToday(){
   const rts = routinesOn(k);
   const doneT = tt.filter(t=>t.done).length;
   let rtTot=0, rtDone=0; rts.forEach(r=>{rtTot+=(r.items||[]).length; rtDone+=routineDone(r,k).length;});
-  const todayCls = classesOnWd(d.getDay());
+  const todayHol = holidayOn(k); const nh = nextHoliday(k);
+  const todayCls = todayHol? [] : classesOnWd(d.getDay());
   const pinned = notes().filter(n=>n.pinned).sort((a,b)=>(b.updated||0)-(a.updated||0)).slice(0,4);
   return headerHTML(greet, sub) + `
   <div class="stats">
@@ -936,7 +985,9 @@ function renderToday(){
   ${(()=>{const lb=lastBackupDays(); const n=countItems(); return n>=5 && (lb==null||lb>=14)?`<div class="card" style="display:flex;align-items:center;gap:10px;border-color:var(--gold)"><span style="font-size:22px">💾</span><div style="flex:1" class="small">${lb==null?"لم تأخذ نسخة احتياطية بعد.":"آخر نسخة احتياطية قبل "+lb+" يوم."} بياناتك على هذا الهاتف فقط.</div><button class="btn sm" id="bkNow">نسخة الآن</button></div>`:"";})()}
   ${(()=>{const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${(()=>{const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
+  ${todayHol?holBanner(todayHol):""}
   ${todayCls.length?`<div class="sec-h"><h2>جدول اليوم</h2></div><div class="card" style="padding:8px 12px">${classList(todayCls,true)}</div>`:""}
+  ${!todayHol&&nh&&daysTo(nh.from)<=7?`<div class="small muted" style="margin:-4px 4px 10px">${(HOLK[nh.kind]||HOLK.off)[0]} ${esc(nh.title)} بعد ${ayam(daysTo(nh.from))}</div>`:""}
   ${overdue.length?`<div class="sec-h"><h2 style="color:var(--warn)">متأخرة</h2></div><div class="card">${overdue.map(t=>taskRow(t,true)).join("")}</div>`:""}
   <div class="sec-h"><h2>مهام اليوم</h2><button class="btn ghost sm" data-new-task="${k}">+ مهمة</button></div>
   <div class="card">${tt.length?tt.map(t=>taskRow(t)).join(""):`<div class="empty">لا مهام لليوم. أضف ما تريد إنجازه.</div>`}</div>
@@ -959,13 +1010,13 @@ function renderPlan(){
       <div class="weeknav"><button class="icon-btn" data-week="-1" aria-label="السابق">→</button>
         <b>${fmtShort.format(ws)} – ${fmtShort.format(we)}</b>
         <button class="icon-btn" data-week="1" aria-label="التالي">←</button></div>
-      <div class="week">${week.map(d=>{const k=keyOf(d);const n=tasksOn(k).filter(t=>!t.done).length;
-        return `<button class="day ${k===tk?"today":""} ${k===sel?"sel":""}" data-day="${k}">${DAYS_S[d.getDay()]}<span class="n">${d.getDate()}</span><span class="dots">${"<i></i>".repeat(Math.min(n,3))}</span></button>`;}).join("")}</div>
+      <div class="week">${week.map(d=>{const k=keyOf(d);const n=tasksOn(k).filter(t=>!t.done).length; const hl=holidayOn(k);
+        return `<button class="day ${k===tk?"today":""} ${k===sel?"sel":""} ${hl?"hol":""}" data-day="${k}" ${hl?`title="${esc(hl.title)}"`:""}>${DAYS_S[d.getDay()]}<span class="n">${d.getDate()}</span><span class="dots">${"<i></i>".repeat(Math.min(n,3))}</span></button>`;}).join("")}</div>
       ${UI.weekOff!==0?`<div style="text-align:center;margin-top:10px"><button class="btn ghost sm" data-week="0">العودة لهذا الأسبوع</button></div>`:""}
     </div>
     <div class="sec-h"><h2>${DAYS[sd.getDay()]} ${fmtShort.format(sd)}</h2><button class="btn ghost sm" data-new-task="${sel}">+ مهمة</button></div>
     <div class="card">${st.length?st.map(t=>taskRow(t)).join(""):`<div class="empty">لا مهام في هذا اليوم.</div>`}</div>
-    ${(()=>{const l=classesOnWd(sd.getDay()); return l.length?`<div class="sec-h"><h2>الحصص</h2></div><div class="card" style="padding:8px 12px">${classList(l, sel===tk)}</div>`:"";})()}
+    ${(()=>{const hl=holidayOn(sel); if(hl) return holBanner(hl); const l=classesOnWd(sd.getDay()); return l.length?`<div class="sec-h"><h2>الحصص</h2></div><div class="card" style="padding:8px 12px">${classList(l, sel===tk)}</div>`:"";})()}
     ${rts.length?`<div class="sec-h"><h2>البرامج</h2></div>${rts.map(r=>routineCard(r,sel,false)).join("")}`:""}
     <div class="sec-h"><h2>بلا موعد</h2><button class="btn ghost sm" data-new-task="">+ مهمة</button></div>
     <div class="card">${undated.length?undated.map(t=>taskRow(t)).join(""):`<div class="empty">أفكار ومهام بلا تاريخ محدد تظهر هنا.</div>`}</div>`;
@@ -1182,6 +1233,9 @@ $("#app").addEventListener("click",e=>{
   if(g("#seedCamry")){ seedCamry(); return; }
   if(g("#seedCands")){ seedCands(); return; }
   if(g("#seedMods")){ seedMods(); return; }
+  if(b=g("[data-edit-hol]")){ editHoliday(b.dataset.editHol); return; }
+  if(g("[data-new-hol]")){ editHoliday(); return; }
+  if(g("#seedMoe")){ seedMoe(); return; }
   if(b=g("[data-edit-cls]")){ editClass(b.dataset.editCls); return; }
   if(b=g("[data-new-cls]")){ editClass(null, b.dataset.newCls); return; }
   if(b=g("[data-edit-exp]")){ editExpense(b.dataset.editExp); return; }
