@@ -50,6 +50,7 @@ nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-to
 nav.tabs button{flex:1;min-width:0;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--muted);font-size:11px;font-weight:500;white-space:nowrap}
 nav.tabs button .i{font-size:21px;line-height:1}
 @media (max-width:400px){nav.tabs button{font-size:10px;letter-spacing:-.2px}nav.tabs button .i{font-size:19px}}
+nav.tabs button[hidden]{display:none}
 nav.tabs button.on{color:var(--acc);font-weight:700}
 /* stats */
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -247,6 +248,7 @@ table.cmp tr.sec td{background:var(--acc2);color:var(--acc);font-weight:700;text
   <button data-tab="today" class="on"><span class="i">☀️</span>اليوم</button>
   <button data-tab="plan"><span class="i">🗓️</span>المخطط</button>
   <button data-tab="money"><span class="i">💰</span>المصاريف</button>
+  <button data-tab="water" hidden><span class="i">💧</span>الماء</button>
   <button data-tab="farm"><span class="i">🌾</span>المزرعة</button>
   <button data-tab="kids"><span class="i">👨‍👩‍👧</span>الأطفال</button>
   <button data-tab="cars"><span class="i">🚙</span>المركبات</button>
@@ -278,7 +280,7 @@ const COLOR_SWATCH = {none:"var(--card)",green:"#cfe6d8",yellow:"#efe2b0",blue:"
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 /* ---------- storage (on this device) ---------- */
-const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays","farmp","farml","farmw","farmwl","fitem","fev"];
+const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays","farmp","farml","farmw","farmwl","fitem","fev","wcust","wday","wdebt"];
 const S = { data:{}, syncState:"local" };
 COLS.forEach(c=>S.data[c]={});
 const LKEY = "daftar.local.v1", BKEY = "daftar.lastBackup";
@@ -328,7 +330,7 @@ function openSettings(){
        <button class="btn ghost sm" id="impPaste" style="margin-top:6px">استيراد النص</button></details>
      <div id="impMsg" class="small muted" style="margin-top:6px"></div></div>
    <div class="actions"><span></span><button class="btn" id="stX">إغلاق</button></div>`);
-  $("#stX").onclick=closeSheet; lockSettingsCard();
+  $("#stX").onclick=closeSheet; modulesCard(); lockSettingsCard();
   $("#bkDown").onclick=downloadBackup;
   $("#bkCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(S.data)); try{ localStorage.setItem(BKEY,String(Date.now())); }catch(e){} $("#impMsg").textContent="نُسخت البيانات. الصقها في ملاحظة أو رسالة لنفسك."; }catch(e){ $("#impMsg").textContent="تعذّر النسخ"; } };
   $("#impPaste").onclick=()=>{ try{ $("#impMsg").textContent="تم استيراد "+importData(JSON.parse($("#impTxt").value))+" عنصر"; }catch(e){ $("#impMsg").textContent="النص غير صالح"; } };
@@ -336,7 +338,7 @@ function openSettings(){
 }
 
 /* ---------- state ---------- */
-const UI = { tab:"today", sel:todayKey(), weekOff:0, noteQ:"", planView:"week", month:todayKey().slice(0,7), vv:"cars", veh:null, modT:"all", kid:null, kv:"edu", fv:"sum", fp:"all" };
+const UI = { tab:"today", sel:todayKey(), weekOff:0, noteQ:"", planView:"week", month:todayKey().slice(0,7), vv:"cars", veh:null, modT:"all", wv:"day", wdate:todayKey(), kid:null, kv:"edu", fv:"sum", fp:"all" };
 const fab = $("#fab");
 
 /* ---------- derived ---------- */
@@ -491,9 +493,10 @@ function editClass(id, defDay){
 
 /* ---------- money ---------- */
 const CUR = {AED:"درهم", TND:"دينار"};
-const CATS_OUT = [["food","🍞","طعام"],["car","🚗","السيارة"],["bills","🧾","فواتير"],["family","👨‍👩‍👧","العائلة"],["farm","🌱","المزرعة"],["health","💊","صحة"],["edu","📚","تعليم"],["shop","🛍️","مشتريات"],["other","📦","أخرى"]];
+const CATS_OUT_ALL = [["water","💧","الماء (الصهاريج)"],["food","🍞","طعام"],["car","🚗","السيارة"],["bills","🧾","فواتير"],["family","👨‍👩‍👧","العائلة"],["farm","🌱","المزرعة"],["health","💊","صحة"],["edu","📚","تعليم"],["shop","🛍️","مشتريات"],["other","📦","أخرى"]];
+Object.defineProperty(window,"CATS_OUT",{get:()=>CATS_OUT_ALL.filter(c=>c[0]!=="water"||modOn("water"))});
 const CATS_IN = [["salary","💼","راتب"],["farm_in","🌾","مبيعات المزرعة"],["other_in","➕","دخل آخر"]];
-const catOf = k => CATS_OUT.concat(CATS_IN).find(c=>c[0]===k) || ["other","📦","أخرى"];
+const catOf = k => CATS_OUT_ALL.concat(CATS_IN).find(c=>c[0]===k) || ["other","📦","أخرى"];
 const fmtN = new Intl.NumberFormat("en-US",{maximumFractionDigits:2, minimumFractionDigits:0});
 const money = (v,cur) => fmtN.format(v)+" "+(CUR[cur]||cur||"");
 const settings = () => (S.data.settings && S.data.settings.main) || {};
@@ -1315,6 +1318,91 @@ function renderFarm(){
   return farmHeader() + seg + body;
 }
 
+/* ---------- modules ---------- */
+const MODS=[["plan","🗓️","المخطط والجدول"],["money","💰","المصاريف"],["water","💧","بيع الماء بالصهاريج"],["farm","🌾","المزرعة"],["kids","👨‍👩‍👧","الأطفال"],["cars","🚙","المركبات"],["notes","📝","المذكرات"]];
+const MOD_DEFAULT={water:false};
+function modOn(k){ if(k==="today"||k==="programs") return true; const t=(settings().tabs)||{}; return k in t ? !!t[k] : (k in MOD_DEFAULT ? MOD_DEFAULT[k] : true); }
+function modulesCard(){
+  const act=$("#sheet .actions"); if(!act) return;
+  const card=document.createElement("div"); card.className="card";
+  card.innerHTML=`<b>🧩 الأقسام الظاهرة</b><p class="small muted" style="margin:4px 0 8px">اختر ما يظهر في هذا التطبيق. إخفاء قسم لا يحذف بياناته.</p>${MODS.map(([k,i,l])=>`<label class="chk-line"><input type="checkbox" data-mod="${k}" ${modOn(k)?"checked":""}> ${i} ${l}</label>`).join("")}`;
+  act.parentNode.insertBefore(card, act);
+  card.querySelectorAll("[data-mod]").forEach(c=>c.onchange=()=>{ const st=settings(); const tabs=Object.assign({},st.tabs||{}); tabs[c.dataset.mod]=c.checked; put("settings","main",Object.assign({},st,{tabs})); toast(c.checked?"أُظهر القسم":"أُخفي القسم"); });
+}
+
+/* ---------- water tanker sales ---------- */
+const WT_DEFAULT=[{id:"s",ic:"☀️",name:"طاقة شمسية",price:5},{id:"g",ic:"⚡",name:"قروب",price:6}];
+const wTypes=()=>{ const t=settings().wTypes; return Array.isArray(t)&&t.length? t : WT_DEFAULT; };
+const wCur=()=>settings().wCur||"TND";
+const wCust=(all)=>Object.entries(S.data.wcust||{}).map(([id,v])=>Object.assign({id},v)).filter(c=>all||c.active!==false).sort((a,b)=>(a.order||0)-(b.order||0));
+const wDay=k=>((S.data.wday||{})[k]||{}).c||{};
+function wTot(c){ const r={n:0,m:0,t:{}}; const T=wTypes(); for(const cid in c){ T.forEach(t=>{ const v=+(c[cid]||{})[t.id]||0; r.t[t.id]=(r.t[t.id]||0)+v; r.n+=v; r.m+=v*(+t.price||0); }); } return r; }
+function wSum(pred){ const r={n:0,m:0,t:{}}; const T=wTypes(); Object.entries(S.data.wday||{}).forEach(([k,v])=>{ if(!pred(k)) return; const x=wTot((v||{}).c||{}); r.n+=x.n; r.m+=x.m; T.forEach(t=>{ r.t[t.id]=(r.t[t.id]||0)+(x.t[t.id]||0); }); }); return r; }
+function sahrij(n){ return n===1?"صهريج واحد":n===2?"صهريجان":(n>=3&&n<=10)?n+" صهاريج":n+" صهريجاً"; }
+function wChange(cid,tid,d){
+  const k=UI.wdate; const doc=JSON.parse(JSON.stringify((S.data.wday||{})[k]||{c:{}})); doc.c=doc.c||{};
+  const o=doc.c[cid]=doc.c[cid]||{}; const nv=Math.max(0,(+o[tid]||0)+d); if(nv===(+o[tid]||0)) return;
+  o[tid]=nv; doc.date=k; put("wday",k,doc); try{ navigator.vibrate&&navigator.vibrate(15); }catch(e){}
+}
+function wRep(title,r){ const T=wTypes(); const c=wCur();
+  return `<div class="card"><b>${title}</b><table class="cmp" style="margin-top:6px;min-width:0;width:100%"><tr><td></td>${T.map(t=>`<td style="min-width:0;font-weight:700">${t.ic} ${esc(t.name)}</td>`).join("")}<td style="min-width:0;font-weight:700">المجموع</td></tr>
+  <tr><td style="min-width:0">الصهاريج</td>${T.map(t=>`<td style="min-width:0">${r.t[t.id]||0}</td>`).join("")}<td style="min-width:0;font-weight:800">${r.n}</td></tr>
+  <tr><td style="min-width:0">المبلغ</td>${T.map(t=>`<td style="min-width:0">${fmtN.format((r.t[t.id]||0)*(+t.price||0))}</td>`).join("")}<td style="min-width:0;font-weight:800;color:var(--acc)">${money(r.m,c)}</td></tr></table></div>`; }
+function renderWater(){
+  const seg=`<div class="seg"><button data-wv="day" class="${UI.wv==="day"?"on":""}">اليوم</button><button data-wv="rep" class="${UI.wv==="rep"?"on":""}">الحساب</button><button data-wv="debt" class="${UI.wv==="debt"?"on":""}">الديون</button><button data-wv="set" class="${UI.wv==="set"?"on":""}">الإعداد</button></div>`;
+  const T=wTypes(), c=wCur(), t=todayKey(); let body="";
+  if(UI.wv==="day"){
+    const k=UI.wdate, D=wDay(k), tot=wTot(D), L=wCust();
+    body=`<div class="mnav"><button class="icon-btn" data-wday="-1" aria-label="اليوم السابق">→</button><b>${DAYS[parseKey(k).getDay()]} ${fmtShort.format(parseKey(k))}${k===t?' <span class="small" style="color:var(--acc)">· اليوم</span>':""}</b><button class="icon-btn" data-wday="1" aria-label="اليوم التالي" ${k>=t?'style="opacity:.3"':""}>←</button></div>
+    <div class="stats" style="grid-template-columns:repeat(${T.length+1},1fr)">${T.map(x=>`<div class="stat"><b>${tot.t[x.id]||0}</b><span>${x.ic} ${esc(x.name)}</span></div>`).join("")}<div class="stat" style="background:var(--acc);border-color:var(--acc)"><b style="color:#fff;font-size:18px">${fmtN.format(tot.m)}</b><span style="color:#e5f3ee">${CUR[c]||c}</span></div></div><div style="height:12px"></div>
+    ${L.length? L.map(cu=>{ const o=D[cu.id]||{}; return `<div class="card"><b style="font-size:17px">${esc(cu.name)}</b><div style="display:grid;grid-template-columns:repeat(${Math.min(T.length,2)},1fr);gap:8px;margin-top:8px">${T.map(x=>`<div style="background:var(--acc2);border-radius:12px;padding:8px;text-align:center"><div class="small">${x.ic} ${esc(x.name)} · ${fmtN.format(+x.price||0)}</div><div style="font-size:30px;font-weight:800;line-height:1.2">${+o[x.id]||0}</div>
+      <div style="display:flex;gap:6px"><button class="btn ghost" style="width:46px;font-size:22px;padding:6px 0" data-wc="${cu.id}" data-wt="${x.id}" data-wd="-1" aria-label="نقص">−</button><button class="btn" style="flex:1;font-size:26px;padding:6px 0" data-wc="${cu.id}" data-wt="${x.id}" data-wd="1" aria-label="إضافة">+</button></div></div>`).join("")}</div></div>`; }).join("")
+     : `<div class="card empty">أضف الحرفاء وأنواع الصهاريج وأسعارها من «الإعداد».<br><br><button class="btn" data-wv="set">الإعداد</button></div>`}`;
+  } else if(UI.wv==="rep"){
+    const ws=keyOf(weekStart(0)), we=keyOf(addDays(weekStart(0),6)), mk=t.slice(0,7);
+    const rd=wSum(k=>k===t), rw=wSum(k=>k>=ws&&k<=we), rm=wSum(k=>k.startsWith(mk));
+    const exp=expenses().filter(e=>e.type!=="in"&&e.cat==="water"&&(e.date||"").startsWith(mk)).reduce((s,e)=>{ const v=e.cur===c?e.amount:toMain(e.amount,e.cur); return s+(v||0); },0);
+    const debt=Object.values(S.data.wdebt||{}).filter(d=>!d.paid).reduce((s,d)=>s+(+d.amount||0),0);
+    const per={}; Object.entries(S.data.wday||{}).forEach(([k,v])=>{ if(!k.startsWith(mk)) return; Object.entries((v||{}).c||{}).forEach(([cid,o])=>{ const p=per[cid]=per[cid]||{n:0,m:0}; T.forEach(x=>{ const q=+o[x.id]||0; p.n+=q; p.m+=q*(+x.price||0); }); }); });
+    const names=Object.fromEntries(wCust(true).map(x=>[x.id,x.name]));
+    body=wRep("اليوم",rd)+wRep("هذا الأسبوع",rw)+wRep("هذا الشهر",rm)+
+    `<div class="card"><b>صافي الشهر</b><div class="kv" style="margin-top:8px"><span>المداخيل</span><span style="color:var(--acc);font-weight:700">${money(rm.m,c)}</span><span>مصاريف الماء</span><span style="color:var(--warn);font-weight:700">${money(exp,c)}</span><span>الصافي</span><span style="font-weight:800">${money(rm.m-exp,c)}</span><span>ديون لم تُسدَّد</span><span style="color:var(--warn)">${money(debt,c)}</span></div>
+     <div style="margin-top:10px"><button class="btn ghost sm" id="wExp">+ مصروف للماء</button></div></div>
+    ${Object.keys(per).length?`<div class="card"><b>حسب الحريف (هذا الشهر)</b>${Object.entries(per).sort((a,b)=>b[1].m-a[1].m).map(([cid,p])=>`<div class="logrow"><span class="ic">👤</span><div class="t"><b>${esc(names[cid]||"(محذوف)")}</b><div class="meta">${sahrij(p.n)}</div></div><span class="c">${money(p.m,c)}</span></div>`).join("")}</div>`:""}`;
+  } else if(UI.wv==="debt"){
+    const D=Object.entries(S.data.wdebt||{}).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    const open=D.filter(d=>!d.paid), paid=D.filter(d=>d.paid);
+    body=`<div class="card"><div class="kv"><span>مجموع الديون</span><span style="color:var(--warn);font-weight:800">${money(open.reduce((s,d)=>s+(+d.amount||0),0),c)}</span></div><div style="margin-top:10px"><button class="btn sm" id="wDebtNew">+ دين جديد</button></div></div>
+    <div class="card" style="padding:4px 12px">${open.length?open.map(d=>`<div class="logrow"><span class="ic">📒</span><div class="t" data-wdebt="${d.id}"><b>${esc(d.name)}</b><div class="meta">${esc([d.date&&fmtShort.format(parseKey(d.date)), d.note].filter(Boolean).join(" · "))}</div></div><span class="c">${money(+d.amount||0,c)}</span><button class="btn ghost sm" data-wpay="${d.id}" style="margin-inline-start:6px">سُدِّد</button></div>`).join(""):`<div class="empty">لا توجد ديون</div>`}</div>
+    ${paid.length?`<details><summary class="small muted">${paid.length} دين مسدَّد</summary><div class="card" style="padding:4px 12px;margin-top:6px">${paid.map(d=>`<div class="logrow" data-wdebt="${d.id}"><span class="ic">✅</span><div class="t"><b>${esc(d.name)}</b><div class="meta">${d.paidDate?"سُدِّد "+fmtShort.format(parseKey(d.paidDate)):""}</div></div><span class="c">${money(+d.amount||0,c)}</span></div>`).join("")}</div></details>`:""}`;
+  } else {
+    const L=wCust(true);
+    body=`<div class="card"><b>أنواع الصهاريج والأسعار</b>${T.map((x,i)=>`<div class="logrow" data-wtype="${i}"><span class="ic">${x.ic}</span><div class="t"><b>${esc(x.name)}</b></div><span class="c">${money(+x.price||0,c)}</span></div>`).join("")}
+     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn ghost sm" data-wtype="new">+ نوع</button><button class="btn ghost sm" id="wCurBtn">العملة: ${CUR[c]||c}</button></div></div>
+    <div class="card"><b>الحرفاء</b>${L.length?L.map(x=>`<div class="logrow" style="${x.active===false?"opacity:.5":""}"><span class="ic">👤</span><div class="t" data-wcust="${x.id}"><b>${esc(x.name)}</b><div class="meta">${x.active===false?"مخفي":"ظاهر في شاشة اليوم"}</div></div><button class="btn ghost sm" data-wtog="${x.id}">${x.active===false?"إظهار":"إخفاء"}</button></div>`).join(""):`<div class="empty">لا يوجد حرفاء</div>`}
+     <div style="margin-top:8px"><button class="btn sm" data-wcust="new">+ حريف</button></div></div>`;
+  }
+  return headerHTML("بيع الماء","الصهاريج — العدّ اليومي والحساب") + seg + body;
+}
+function editWType(i){
+  const T=wTypes().map(x=>Object.assign({},x)); const x=i==="new"?{id:"t"+uid().slice(-5),ic:"💧",name:"",price:0}:T[+i];
+  formSheet({title:"نوع الصهريج", fields:[{k:"name",l:"الاسم",p:"مثلاً: طاقة شمسية"},{k:"ic",l:"الرمز",t:"chips",o:[["☀️","☀️"],["⚡","⚡"],["💧","💧"],["🚚","🚚"],["⛽","⛽"]],d:"💧"},{k:"price",l:"السعر للصهريج",num:true}], obj:x, required:"name",
+    onDelete: i!=="new"&&T.length>1? ()=>confirmSheet("حذف هذا النوع؟ (العدّ السابق يبقى محفوظاً)",()=>{ T.splice(+i,1); put("settings","main",Object.assign({},settings(),{wTypes:T})); }) : null,
+    onSave:o=>{ const n=Object.assign({},x,o); if(i==="new") T.push(n); else T[+i]=n; put("settings","main",Object.assign({},settings(),{wTypes:T})); }});
+}
+function editWCust(id){
+  const x=id&&id!=="new"?S.data.wcust[id]:{};
+  formSheet({title:"الحريف", fields:[{k:"name",l:"الاسم"},{k:"phone",l:"الهاتف",t:"tel"},{k:"notes",l:"ملاحظات",t:"area"}], obj:x, required:"name",
+    onDelete: id&&id!=="new"? ()=>confirmSheet("حذف الحريف؟ (عدّه السابق يبقى في الحساب)",()=>del("wcust",id)) : null,
+    onSave:o=>{ const L=wCust(true); put("wcust", id&&id!=="new"?id:uid(), Object.assign({active:true,order:L.reduce((m,c)=>Math.max(m,c.order||0),0)+1},x,o)); }});
+}
+function editWDebt(id){
+  const x=id?S.data.wdebt[id]:{date:todayKey(),paid:false};
+  formSheet({title:"📒 دين", fields:[{k:"name",l:"الاسم",p:"اسم صاحب الدين"},{t:"row",f:[{k:"amount",l:"المبلغ",num:true},{k:"date",l:"التاريخ",t:"date"}]},{k:"note",l:"ملاحظة"},{k:"paid",l:"سُدِّد",t:"check",d:false}], obj:x, required:"name",
+    onDelete: id? ()=>confirmSheet("حذف هذا الدين؟",()=>del("wdebt",id)) : null,
+    onSave:o=>{ if(!(o.amount>0)){ toast("اكتب المبلغ"); return; } put("wdebt", id||uid(), Object.assign({},x,o,{paidDate:o.paid?(x.paidDate||todayKey()):""})); }});
+}
+
 function renderToday(){
   const k=todayKey(), d=new Date();
   const sub = `${DAYS[d.getDay()]} ${fmtG.format(d)}${fmtH?"<br>"+fmtH.format(d):""}`;
@@ -1334,9 +1422,9 @@ function renderToday(){
     <div class="stat"><b>${Object.keys(S.data.notes).length}</b><span>مذكرة</span></div>
   </div>
   ${(()=>{const lb=lastBackupDays(); const n=countItems(); return n>=5 && (lb==null||lb>=14)?`<div class="card" style="display:flex;align-items:center;gap:10px;border-color:var(--gold)"><span style="font-size:22px">💾</span><div style="flex:1" class="small">${lb==null?"لم تأخذ نسخة احتياطية بعد.":"آخر نسخة احتياطية قبل "+lb+" يوم."} بياناتك على هذا الهاتف فقط.</div><button class="btn sm" id="bkNow">نسخة الآن</button></div>`:"";})()}
-  ${(()=>{const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" ${a.fitem?`data-fitem="${a.fitem}" data-fsec="${a.sec}"`:`data-edit-flog="${a.id}"`}><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
-  ${(()=>{const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
-  ${(()=>{const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
+  ${(()=>{if(!modOn("farm")) return ""; const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" ${a.fitem?`data-fitem="${a.fitem}" data-fsec="${a.sec}"`:`data-edit-flog="${a.id}"`}><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
+  ${(()=>{if(!modOn("kids")) return ""; const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
+  ${(()=>{if(!modOn("cars")) return ""; const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${todayHol?holBanner(todayHol):""}
   ${todayCls.length?`<div class="sec-h"><h2>جدول اليوم</h2></div><div class="card" style="padding:8px 12px">${classList(todayCls,true)}</div>`:""}
   ${!todayHol&&nh&&daysTo(nh.from)<=7?`<div class="small muted" style="margin:-4px 4px 10px">${(HOLK[nh.kind]||HOLK.off)[0]} ${esc(nh.title)} بعد ${ayam(daysTo(nh.from))}</div>`:""}
@@ -1422,11 +1510,12 @@ function streaks(list){
 
 function render(){
   if(window.__dlocked) return;
+  if(!modOn(UI.tab)) UI.tab="today";
   const app=$("#app"); const y=window.scrollY;
   const focusQ = document.activeElement && document.activeElement.id==="noteQ";
-  app.innerHTML = UI.tab==="today"?renderToday():UI.tab==="plan"?renderPlan():UI.tab==="notes"?renderNotes():UI.tab==="money"?renderMoney():UI.tab==="cars"?renderCars():UI.tab==="kids"?renderKids():UI.tab==="farm"?renderFarm():renderPrograms();
+  app.innerHTML = UI.tab==="today"?renderToday():UI.tab==="plan"?renderPlan():UI.tab==="notes"?renderNotes():UI.tab==="money"?renderMoney():UI.tab==="cars"?renderCars():UI.tab==="kids"?renderKids():UI.tab==="farm"?renderFarm():UI.tab==="water"?renderWater():renderPrograms();
   setSync();
-  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===UI.tab));
+  document.querySelectorAll("#tabs button").forEach(b=>{ b.classList.toggle("on",b.dataset.tab===UI.tab); b.hidden=!modOn(b.dataset.tab); });
   if(focusQ){ const i=$("#noteQ"); i.focus(); i.setSelectionRange(i.value.length,i.value.length); }
   window.scrollTo(0,y);
 }
@@ -1530,7 +1619,8 @@ function addSamples(){
 
 /* ---------- events ---------- */
 $("#tabs").onclick=e=>{ const b=e.target.closest("button"); if(!b) return; if(UI.tab==="cars" && b.dataset.tab==="cars") UI.veh=null; if(UI.tab==="kids" && b.dataset.tab==="kids") UI.kid=null; UI.tab=b.dataset.tab; if(UI.tab==="plan") UI.sel=UI.sel||todayKey(); window.scrollTo(0,0); render(); };
-fab.onclick=()=>{ if(UI.tab==="farm"){ if(UI.fv==="parcels") editParcel(); else if(UI.fv==="workers") editWorker(); else if(UI.fv==="well") editWread(); else if(UI.fv==="remote") editRItem("rzone"); else if(FSEC[UI.fv]){ if(UI.fitem&&S.data.fitem[UI.fitem]) editFev(null,UI.fitem); else editFItem(UI.fv); } else editFlog(); return; }
+fab.onclick=()=>{ if(UI.tab==="water"){ if(UI.wv==="debt") editWDebt(); else if(UI.wv==="set") editWCust("new"); else { editExpense(); setTimeout(()=>{ const c=$("#xC [data-c=water]"); if(c) c.click(); },30); } return; }
+  if(UI.tab==="farm"){ if(UI.fv==="parcels") editParcel(); else if(UI.fv==="workers") editWorker(); else if(UI.fv==="well") editWread(); else if(UI.fv==="remote") editRItem("rzone"); else if(FSEC[UI.fv]){ if(UI.fitem&&S.data.fitem[UI.fitem]) editFev(null,UI.fitem); else editFItem(UI.fv); } else editFlog(); return; }
   if(UI.tab==="kids"){ if(UI.kid && S.data.kids[UI.kid]){ if(UI.kv==="info") editKid(UI.kid); else pickKrec(UI.kid, UI.kv); } else editKid(); return; }
   if(UI.tab==="cars"){ if(UI.vv==="cmp") editCand(); else if(UI.vv==="mods") editMod(); else if(UI.veh && S.data.vehicles[UI.veh]) editLog(null,UI.veh); else editVehicle(); return; }
   if(UI.tab==="notes") editNote(); else if(UI.tab==="programs") editRoutine(); else if(UI.tab==="money") editExpense();
@@ -1566,6 +1656,17 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-fitem]")){ UI.tab="farm"; if(b.dataset.fsec) UI.fv=b.dataset.fsec; UI.fitem=b.dataset.fitem; window.scrollTo(0,0); render(); return; }
   if(g("[data-fitem-back]")){ UI.fitem=null; render(); return; }
   if(g("#farmName")){ editFarmName(); return; }
+  if(b=g("[data-wv]")){ UI.wv=b.dataset.wv; render(); return; }
+  if(b=g("[data-wday]")){ const d=addDays(parseKey(UI.wdate),+b.dataset.wday); if(keyOf(d)>todayKey()) return; UI.wdate=keyOf(d); render(); return; }
+  if(b=g("[data-wc]")){ wChange(b.dataset.wc,b.dataset.wt,+b.dataset.wd); return; }
+  if(b=g("[data-wtype]")){ editWType(b.dataset.wtype); return; }
+  if(b=g("[data-wcust]")){ editWCust(b.dataset.wcust); return; }
+  if(b=g("[data-wtog]")){ const x=S.data.wcust[b.dataset.wtog]; if(x) put("wcust",b.dataset.wtog,Object.assign({},x,{active:x.active===false})); return; }
+  if(g("#wCurBtn")){ const st=settings(); put("settings","main",Object.assign({},st,{wCur:(st.wCur||"TND")==="TND"?"AED":"TND"})); return; }
+  if(g("#wDebtNew")){ editWDebt(); return; }
+  if(b=g("[data-wdebt]")){ editWDebt(b.dataset.wdebt); return; }
+  if(b=g("[data-wpay]")){ const id=b.dataset.wpay, x=S.data.wdebt[id]; if(!x) return; confirmSheet("تأكيد تسديد دين "+(x.name||"")+"؟",()=>put("wdebt",id,Object.assign({},x,{paid:true,paidDate:todayKey()}))); setTimeout(()=>{ const y=$("#cYes"); if(y){ y.textContent="تمّ التسديد"; y.style.background="var(--acc)"; } },0); return; }
+  if(g("#wExp")){ editExpense(); setTimeout(()=>{ const c=$("#xC [data-c=water]"); if(c) c.click(); },30); return; }
   if(b=g("[data-fv]")){ UI.fv=b.dataset.fv; UI.fitem=null; render(); const n=$("#fnav .chip.on"); if(n) n.scrollIntoView({inline:"center",block:"nearest"}); return; }
   if(b=g("[data-new-fitem]")){ editFItem(b.dataset.newFitem); return; }
   if(b=g("[data-edit-fitem]")){ const x=S.data.fitem[b.dataset.editFitem]; if(x) editFItem(x.sec,b.dataset.editFitem); return; }
