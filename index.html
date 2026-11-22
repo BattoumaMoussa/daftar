@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="دفتري">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
@@ -28,6 +28,8 @@ body{padding-bottom:150px}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
 .wrap{max-width:720px;margin:0 auto;padding:16px 16px 24px}
+.hd-logo{width:52px;height:52px;border-radius:14px;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.lk-logo-img{width:96px;height:96px;border-radius:24px;display:block;margin:0 auto 10px;box-shadow:0 4px 16px rgba(0,0,0,.15)}
 header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:4px 0 14px}
 header.top h1{font-size:24px;margin:0;font-weight:800}
 header.top .sub{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.6}
@@ -352,8 +354,8 @@ function routineDone(r,k){ return (r.log && r.log[k]) || []; }
 function weekStart(off){ const d=new Date(); d.setHours(0,0,0,0); const wd=(d.getDay()+6)%7; return addDays(d,-wd+off*7); } // Monday start
 
 /* ---------- render ---------- */
-function headerHTML(title, sub){
-  return `<header class="top"><div><h1>${title}</h1><div class="sub">${sub||""}</div></div><div style="display:flex;gap:6px;align-items:center"><span id="sync" class="sync"></span><button class="icon-btn" id="settings" aria-label="الإعدادات">⚙️</button></div></header>`;
+function headerHTML(title, sub, logo){
+  return `<header class="top">${logo?'<img class="hd-logo" src="icon-192.png" alt="">':""}<div style="flex:1"><h1>${title}</h1><div class="sub">${sub||""}</div></div><div style="display:flex;gap:6px;align-items:center"><span id="sync" class="sync"></span><button class="icon-btn" id="settings" aria-label="الإعدادات">⚙️</button></div></header>`;
 }
 function taskRow(t, showDate){
   const meta=[];
@@ -1510,7 +1512,7 @@ function renderToday(){
   const todayHol = holidayOn(k); const nh = nextHoliday(k);
   const todayCls = todayHol? [] : classesOnWd(d.getDay());
   const pinned = notes().filter(n=>n.pinned).sort((a,b)=>(b.updated||0)-(a.updated||0)).slice(0,4);
-  return headerHTML(greet, sub) + `
+  return headerHTML(greet, sub, true) + `
   <div class="stats">
     <div class="stat"><b>${doneT}/${tt.length}</b><span>مهام اليوم</span></div>
     <div class="stat"><b>${rtTot?Math.round(rtDone/rtTot*100):0}%</b><span>البرامج</span></div>
@@ -1880,7 +1882,7 @@ function unlock(){ window.__dlocked=false; setLockFails({n:0,until:0}); document
 function drawLock(msg){
   let el=$("#lock"); if(!el){ el=document.createElement("div"); el.id="lock"; el.className="lock"; document.body.appendChild(el); el.onclick=lockClick; }
   const n=LK.len||4;
-  el.innerHTML=`<div class="lk-in"><div class="lk-logo">📒</div><h2>دفتري الشخصي</h2><div class="lk-msg" id="lkMsg">${msg||(LK.bio?"البصمة أو رمز الدخول":"أدخل رمز الدخول")}</div>
+  el.innerHTML=`<div class="lk-in"><img class="lk-logo-img" src="icon-192.png" alt=""><h2>دفتري الشخصي</h2><div class="lk-msg" id="lkMsg">${msg||(LK.bio?"البصمة أو رمز الدخول":"أدخل رمز الدخول")}</div>
    <div class="dots" id="lkDots">${Array.from({length:n},(_,i)=>`<i class="${i<lkEntry.length?"on":""}"></i>`).join("")}</div>
    <div class="pad">${[1,2,3,4,5,6,7,8,9].map(d=>`<button data-pd="${d}">${d}</button>`).join("")}${LK.bio?`<button class="ghost" data-pbio="1" aria-label="البصمة">☝️</button>`:`<span></span>`}<button data-pd="0">0</button><button class="ghost" data-pdel="1" aria-label="حذف">⌫</button></div>
    <button class="lk-link" id="lkForgot">نسيت الرمز؟</button></div>`;
