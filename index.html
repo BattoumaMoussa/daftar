@@ -201,6 +201,18 @@ table.cmp tr.sec td{background:var(--acc2);color:var(--acc);font-weight:700;text
 .holbanner{display:flex;gap:12px;align-items:center;background:#fbf3d6;border:1px solid #efe2b0;border-radius:var(--r);padding:14px;margin-bottom:12px}
 @media (prefers-color-scheme:dark){.holbanner{background:#3a331b;border-color:#4d4426}}
 .holbanner .e{font-size:28px}.holbanner b{display:block}
+.fnav{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;margin:0 -16px 8px;padding-inline:16px;scrollbar-width:none}
+.fnav::-webkit-scrollbar{display:none}
+.fnav .chip{flex:none;white-space:nowrap}
+.stages{display:flex;gap:4px;margin:4px 0 10px}
+.stages button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 2px;font-size:11px;color:var(--muted);line-height:1.4}
+.stages button b{display:block;font-size:16px}
+.stages button.done{background:var(--acc2);color:var(--acc);border-color:var(--acc2)}
+.stages button.cur{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:700}
+.wex{border-inline-start:4px solid var(--line)}
+.wex.st-done{border-inline-start-color:var(--acc)}.wex.st-run{border-inline-start-color:var(--gold)}.wex.st-plan{border-inline-start-color:#5b7fb8}
+.ck{display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer}
+.ck.on span{text-decoration:line-through;color:var(--muted)}
 .day-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:2px 0 4px}
 /* money */
 .mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -266,7 +278,7 @@ const COLOR_SWATCH = {none:"var(--card)",green:"#cfe6d8",yellow:"#efe2b0",blue:"
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1800); }
 
 /* ---------- storage (on this device) ---------- */
-const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays","farmp","farml","farmw","farmwl"];
+const COLS = ["notes","tasks","routines","expenses","classes","settings","vehicles","vlogs","candidates","mods","kids","krec","holidays","farmp","farml","farmw","farmwl","fitem","fev"];
 const S = { data:{}, syncState:"local" };
 COLS.forEach(c=>S.data[c]={});
 const LKEY = "daftar.local.v1", BKEY = "daftar.lastBackup";
@@ -1048,10 +1060,206 @@ function flogRow(l){
 function farmAlerts(){
   const t=todayKey(); const out=[];
   farmL().filter(l=>isPlanned(l) || (!l.done && l.date<=t)).forEach(l=>{ const d=daysTo(l.date); if(d!=null && d<=7) out.push({id:l.id, txt:`${(FLOGK[l.kind]||FLOGK.note)[0]} ${l.title}${l.parcel&&l.parcel!=="all"?" — "+pName(l.parcel):""}`, d}); });
+  fevs().filter(e=>e.nextDate).forEach(e=>{ const d=daysTo(e.nextDate); const it=S.data.fitem[e.item]; if(!it||!FSEC[it.sec]) return; const k=FSEC[it.sec].ev[e.kind]||["📝",""]; if(d!=null && d>=-3 && d<=7) out.push({fitem:e.item, sec:it.sec, txt:`${k[0]} ${e.title||k[1]} — ${it.name}`, d}); });
   return out.sort((a,b)=>a.d-b.d);
 }
+/* ---------- farm registries ---------- */
+const CUR2=[["TND","دينار"],["AED","درهم"]];
+const FEV_BASE = (ev,sign)=>[
+  {k:"kind",l:"النوع",t:"chips",o:Object.entries(ev).map(([k,v])=>[k,v[0]+" "+v[1]]),d:Object.keys(ev)[0]},
+  {k:"title",l:"الوصف",p:"اختياري"},
+  {t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"qty",l:sign?"العدد / الكمية":"الكمية",num:true}]},
+  {t:"row",f:[{k:"cost",l:"التكلفة",num:true},{k:"income",l:"الدخل (بيع)",num:true}]},
+  {k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"},
+  {k:"nextDate",l:"الموعد القادم (اختياري)",t:"date"},
+  {k:"notes",l:"ملاحظات",t:"area"}
+];
+const stableOpts=()=>[["","—"]].concat(fitems("stable").map(x=>[x.id,x.name]));
+const parcelOpts=()=>[["","—"]].concat(farmP().map(x=>[x.id,x.name]));
+const FSEC = {
+  trees:{ic:"🌳",l:"الأشجار",count:"count",countL:"شجرة",
+    f:()=>[{k:"name",l:"المجموعة",p:"مثلاً: فستق البطومة"},{k:"parcel",l:"القطعة",t:"select",o:parcelOpts()},{t:"row",f:[{k:"species",l:"النوع",p:"فستق / زيتون / تين"},{k:"variety",l:"الصنف",p:"ماطر / شملالي"}]},{t:"row",f:[{k:"count",l:"العدد الأولي",num:true},{k:"planted",l:"تاريخ الغراسة",t:"date"}]},{t:"row",f:[{k:"spacing",l:"المسافات",p:"7×7 م"},{k:"rootstock",l:"الأصل (الطعم)"}]},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.species,x.variety,x.parcel&&pName(x.parcel)],
+    ev:{plant:["🌱","غرس / تعويض",1],dead:["🥀","موت / قلع",-1],prune:["✂️","تقليم"],graft:["🔗","تطعيم"],treat:["💊","رش / علاج"],fert:["🧪","تسميد"],harvest:["🧺","جني",0],note:["📝","ملاحظة"]}},
+  seed:{ic:"🌿",l:"الشتلات",count:"qty",countL:"في المشتل",
+    f:()=>[{k:"name",l:"الدفعة",p:"مثلاً: شتلات زيتون ربيع 2027"},{t:"row",f:[{k:"species",l:"النوع"},{k:"variety",l:"الصنف"}]},{t:"row",f:[{k:"qty",l:"العدد",num:true},{k:"supplier",l:"المورّد / المشتل"}]},{t:"row",f:[{k:"price",l:"الثمن",num:true},{k:"date",l:"تاريخ الشراء",t:"date"}]},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.species,x.variety,x.supplier],
+    ev:{plant:["🌱","غرس في الحقل",-1],dead:["🥀","تلف",-1],buy:["🛒","شراء إضافي",1],water:["💧","سقي"],treat:["💊","علاج"],note:["📝","ملاحظة"]}},
+  equip:{ic:"🚜",l:"المعدات",
+    f:()=>[{k:"name",l:"الاسم",p:"جرار / مضخة / مولّد"},{t:"row",f:[{k:"brand",l:"الماركة"},{k:"model",l:"الطراز"}]},{t:"row",f:[{k:"serial",l:"الرقم التسلسلي"},{k:"hours",l:"ساعات العمل / العداد",num:true}]},{t:"row",f:[{k:"price",l:"الثمن",num:true},{k:"bought",l:"تاريخ الشراء",t:"date"}]},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"},{k:"status",l:"الحالة",t:"chips",o:[["planned","مخطط لشرائها"],["ok","تعمل"],["fault","معطلة"]],d:"ok"},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.brand,x.model,{planned:"مخطط لشرائها",ok:"تعمل",fault:"⚠️ معطلة"}[x.status||"ok"]],
+    ev:{maint:["🔧","صيانة"],fault:["⚠️","عطل"],repair:["🛠️","إصلاح"],fuel:["⛽","وقود"],note:["📝","ملاحظة"]}},
+  sheep:{ic:"🐑",l:"الأغنام والماعز",count:"count",countL:"رأس",
+    f:()=>[{k:"name",l:"القطيع",p:"مثلاً: القطيع الأول"},{t:"row",f:[{k:"breed",l:"السلالة",p:"بربري / غربي…"},{k:"count",l:"العدد الأولي",num:true}]},{k:"stable",l:"الإسطبل",t:"select",o:stableOpts()},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.breed,x.stable&&(S.data.fitem[x.stable]||{}).name],
+    ev:{birth:["🐣","ولادة",1],buy:["🛒","شراء",1],sale:["💰","بيع",-1],dead:["🥀","نفوق",-1],vacc:["💉","تلقيح / علاج"],feed:["🌾","علف"],shear:["✂️","جزّ الصوف"],note:["📝","ملاحظة"]}},
+  poultry:{ic:"🐔",l:"الدواجن",count:"count",countL:"طير",
+    f:()=>[{k:"name",l:"المجموعة",p:"دجاج بيّاض / ديك رومي"},{t:"row",f:[{k:"breed",l:"النوع / السلالة"},{k:"count",l:"العدد الأولي",num:true}]},{k:"stable",l:"المكان",t:"select",o:stableOpts()},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.breed,x.stable&&(S.data.fitem[x.stable]||{}).name],
+    ev:{eggs:["🥚","بيض",0],hatch:["🐣","تفقيس",1],buy:["🛒","شراء",1],sale:["💰","بيع",-1],dead:["🥀","نفوق",-1],vacc:["💉","تلقيح / علاج"],feed:["🌾","علف"],note:["📝","ملاحظة"]}},
+  stable:{ic:"🐎",l:"الإسطبلات",
+    f:()=>[{k:"name",l:"الاسم",p:"إسطبل الأغنام / خم الدجاج"},{t:"row",f:[{k:"animals",l:"الحيوانات"},{k:"capacity",l:"السعة",num:true}]},{t:"row",f:[{k:"area",l:"المساحة (م²)",num:true},{k:"status",l:"الحالة",t:"chips",o:[["planned","مخطط"],["build","قيد البناء"],["ok","مستعمل"]],d:"ok"}]},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.animals,x.capacity&&"السعة "+x.capacity,{planned:"مخطط",build:"قيد البناء",ok:"مستعمل"}[x.status||"ok"]],
+    ev:{clean:["🧹","تنظيف"],maint:["🔧","صيانة"],build:["🏗️","بناء / توسعة"],note:["📝","ملاحظة"]}},
+  build:{ic:"🏠",l:"المباني",
+    f:()=>[{k:"name",l:"المبنى",p:"مخزن / سكن الحارس / خزان / سياج"},{t:"row",f:[{k:"type",l:"النوع"},{k:"area",l:"المساحة (م²)",num:true}]},{k:"status",l:"الحالة",t:"chips",o:[["planned","مخطط"],["build","قيد الإنجاز"],["ok","منجز"]],d:"planned"},{t:"row",f:[{k:"budget",l:"الميزانية",num:true},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"}]},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[x.type,x.area&&x.area+" م²",{planned:"مخطط",build:"قيد الإنجاز",ok:"منجز"}[x.status||"planned"]],
+    ev:{work:["🏗️","أشغال"],buy:["🛒","مواد"],maint:["🔧","صيانة"],note:["📝","ملاحظة"]}},
+  cave:{ic:"🕳️",l:"الغيران",
+    f:()=>[{k:"name",l:"الغار",p:"مثلاً: الغار الكبير"},{k:"use",l:"الاستعمال",t:"chips",o:[["home","سكن"],["store","تخزين"],["animals","حيوانات"],["other","أخرى"]],d:"home"},{t:"row",f:[{k:"rooms",l:"عدد الغرف",num:true,raw:true},{k:"size",l:"العمق / المساحة",p:"6 م / 40 م²"}]},{k:"cond",l:"الحالة",t:"chips",o:[["good","جيدة"],["fix","تحتاج ترميم"],["bad","متضررة"]],d:"good"},{k:"notes",l:"ملاحظات",t:"area",p:"التهوية، الرطوبة، المدخل…"}],
+    sub:x=>[{home:"سكن",store:"تخزين",animals:"حيوانات",other:"أخرى"}[x.use||"home"],x.rooms&&x.rooms+" غرف",{good:"جيدة",fix:"تحتاج ترميم",bad:"متضررة"}[x.cond||"good"]],
+    ev:{restore:["🧱","ترميم"],maint:["🔧","صيانة"],clean:["🧹","تنظيف"],note:["📝","ملاحظة"]}},
+};
+const fitems = sec => Object.entries(S.data.fitem||{}).map(([id,v])=>Object.assign({id},v)).filter(x=>x.sec===sec).sort((a,b)=>(a.created||0)-(b.created||0));
+const fevs = item => Object.entries(S.data.fev||{}).map(([id,v])=>Object.assign({id},v)).filter(x=>!item||x.item===item).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.created||0)-(a.created||0));
+function fCount(x){ const S_=FSEC[x.sec]; if(!S_||!S_.count) return null; let n=+x[S_.count]||0; fevs(x.id).forEach(e=>{ const k=S_.ev[e.kind]; if(k&&k[2]) n+=k[2]*(+e.qty||0); }); return n; }
+function editFItem(sec,id){
+  const S_=FSEC[sec]; const x=id?S.data.fitem[id]:{sec};
+  formSheet({title:(id?"":"إضافة: ")+S_.ic+" "+S_.l, fields:S_.f(), obj:x, required:"name",
+    onDelete: id? ()=>confirmSheet("حذفه مع سجله؟",()=>{ fevs(id).forEach(e=>del("fev",e.id)); del("fitem",id); UI.fitem=null; }) : null,
+    onSave:o=>{ const nid=id||uid(); put("fitem",nid,Object.assign({},x,o,{sec,created:x.created||Date.now()}));
+      if(!id && o.price>0) put("expenses",uid(),{type:"out",amount:o.price,cur:o.cur||"TND",cat:"farm",date:o.date||o.bought||todayKey(),note:S_.l+": "+o.name,created:Date.now()}); }});
+}
+function editFev(id,item){
+  const e=id?S.data.fev[id]:{item,date:todayKey()}; const it=S.data.fitem[e.item]||{}; const S_=FSEC[it.sec];
+  const fields=FEV_BASE(S_.ev,!!S_.count).concat(id?[]:[{k:"toExp",l:"سجّل التكلفة / الدخل في المصاريف",t:"check",d:true}]);
+  formSheet({title:(id?"تعديل — ":"")+S_.ic+" "+esc(it.name||""), fields, obj:e,
+    onDelete: id? ()=>confirmSheet("حذف هذا السجل؟",()=>del("fev",id)) : null,
+    onSave:o=>{ const toExp=o.toExp; delete o.toExp; put("fev",id||uid(),Object.assign({},e,o,{item:e.item,created:e.created||Date.now()}));
+      if(!id && toExp){ const k=S_.ev[o.kind]||["",""]; const note=(it.name||S_.l)+": "+(o.title||k[1]);
+        if(o.cost>0) put("expenses",uid(),{type:"out",amount:o.cost,cur:o.cur||"TND",cat:"farm",date:o.date||todayKey(),note,created:Date.now()});
+        if(o.income>0) put("expenses",uid(),{type:"in",amount:o.income,cur:o.cur||"TND",cat:"farm_in",date:o.date||todayKey(),note,created:Date.now()+1}); } }});
+}
+function fevRow(e,S_){
+  const k=S_.ev[e.kind]||["📝",""]; const meta=[e.date&&fmtShort.format(parseKey(e.date)), e.qty!=null&&e.qty!==""?(k[2]===1?"+":k[2]===-1?"−":"")+fmtN.format(e.qty):"", e.nextDate&&"القادم: "+fmtShort.format(parseKey(e.nextDate))].filter(Boolean).join(" · ");
+  const right=e.income?`<span class="c" style="color:var(--acc)">+${money(e.income,e.cur)}</span>`:e.cost?`<span class="c">${money(e.cost,e.cur)}</span>`:"";
+  return `<div class="logrow" data-edit-fev="${e.id}"><span class="ic">${k[0]}</span><div class="t"><b>${esc(e.title||k[1])}</b><div class="meta">${esc(meta)}</div>${e.notes?`<div class="meta">${esc(e.notes.slice(0,120))}</div>`:""}</div>${right}</div>`;
+}
+function renderFSec(sec){
+  const S_=FSEC[sec]; const L=fitems(sec);
+  const tot=S_.count? L.reduce((s,x)=>s+(fCount(x)||0),0) : null;
+  return `${S_.count&&L.length?`<div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><b>${fmtN.format(tot)}</b><span>${S_.countL}</span></div><div class="stat"><b>${L.length}</b><span>${S_.l}</span></div></div><div style="height:12px"></div>`:""}
+  ${L.length? L.map(x=>{ const n=fCount(x); const E=fevs(x.id); const nx=E.filter(e=>e.nextDate&&e.nextDate>=todayKey()).sort((a,b)=>a.nextDate.localeCompare(b.nextDate))[0];
+    return `<div class="card" data-fitem="${x.id}" style="cursor:pointer"><div class="vcard"><span class="ic">${S_.ic}</span><div class="t"><b>${esc(x.name)}</b><span class="small muted">${esc((S_.sub(x)||[]).filter(Boolean).join(" · "))}</span></div><span class="muted">←</span></div>
+    <div class="pills">${n!=null?`<span class="pill">${fmtN.format(n)} ${S_.countL}</span>`:""}${E.length?`<span class="pill">📋 ${E.length}</span>`:""}${nx?`<span class="pill ${daysTo(nx.nextDate)<=7?"warn":""}">📅 ${fmtShort.format(parseKey(nx.nextDate))}</span>`:""}</div></div>`; }).join("")
+    + `<div style="text-align:center"><button class="btn ghost sm" data-new-fitem="${sec}">+ إضافة</button></div>`
+  : `<div class="card empty">لا شيء في «${S_.l}» بعد.<br><br><button class="btn" data-new-fitem="${sec}">+ إضافة</button></div>`}`;
+}
+function renderFItem(id){
+  const x=Object.assign({id},S.data.fitem[id]); const S_=FSEC[x.sec]; const E=fevs(id); const n=fCount(x);
+  const flat=[]; const walk=fs=>fs.forEach(f=>{ if(f.t==="row") return walk(f.f); if(f.t==="h"||f.k==="name") return; let v=x[f.k]; if(v==null||v==="") return;
+    if(f.t==="chips"||f.t==="select"){ const o=(f.o||[]).find(q=>String(q[0])===String(v)); v=o?o[1]:v; } else if(f.t==="date") v=fmtG.format(parseKey(v)); else if(f.num&&!f.raw) v=fmtN.format(v);
+    flat.push([f.l,v]); }); walk(S_.f());
+  const cost={}; E.forEach(e=>{ if(e.cost) cost[e.cur||"TND"]=(cost[e.cur||"TND"]||0)+e.cost; });
+  return `<button class="back" data-fitem-back="1">→ ${S_.l}</button>
+  <div class="card"><div class="vcard"><span class="ic">${S_.ic}</span><div class="t"><b>${esc(x.name)}</b>${n!=null?`<span class="small" style="color:var(--acc);font-weight:700">العدد الحالي: ${fmtN.format(n)} ${S_.countL}</span>`:""}</div><button class="btn ghost sm" data-edit-fitem="${id}">تعديل</button></div>
+  ${flat.length?`<div class="kv" style="margin-top:10px">${flat.map(([a,b])=>`<span>${a}</span><span style="white-space:pre-wrap">${esc(b)}</span>`).join("")}</div>`:""}</div>
+  <div class="sec-h"><h2>السجل</h2><button class="btn ghost sm" data-new-fev="${id}">+ تسجيل</button></div>
+  <div class="card" style="padding:4px 12px">${E.length?E.map(e=>fevRow(e,S_)).join(""):`<div class="empty">سجّل هنا: ${Object.values(S_.ev).slice(0,4).map(v=>v[1]).join("، ")}…</div>`}</div>
+  ${Object.keys(cost).length?`<div class="card small">مجموع التكاليف: <b>${Object.entries(cost).map(([c,v])=>money(v,c)).join(" + ")}</b></div>`:""}`;
+}
+
+/* ---------- well ---------- */
+const WSTAGES=[["explore","🔎","الاستكشاف"],["permit","📄","الترخيص"],["drill","⛏️","الحفر"],["equip","⚙️","التجهيز"],["operate","💧","الاستغلال"]];
+const WSTEPS={explore:["جمع الدراسات السابقة للمنطقة","دراسة جيوفيزيائية للموقع","تحديد نقطة الحفر والعمق المستهدف","مقارنة نتائج الاستكشاف واختيار النقطة النهائية"],
+  permit:["إعداد ملف طلب رخصة الحفر","إيداع الملف لدى المصالح المختصة","متابعة الملف حتى الموافقة","استلام الرخصة"],
+  drill:["طلب عروض من مقاولي الحفر","مقارنة العروض واختيار المقاول","توقيع العقد","متابعة الحفر وتسجيل الطبقات","اختبار الضخ","تحليل جودة الماء والملوحة"],
+  equip:["اختيار المضخة حسب الصبيب والعمق","مصدر الطاقة (شمسي / مولّد / شبكة)","الخزان وشبكة التوزيع","عداد المياه وحماية رأس البئر"],
+  operate:["تسجيل قراءات المستوى والصبيب دورياً","صيانة المضخة","تحليل الماء سنوياً"]};
+const WEX_FIELDS=[
+  {k:"method",l:"نوع الاستكشاف",t:"chips",o:[["sev","⚡ جيوفيزيائي كهربائي (SEV)"],["tdem","🧲 كهرومغناطيسي (TDEM)"],["ai","🤖 تقرير بالأقمار / الذكاء الاصطناعي"],["seismic","📈 زلزالي"],["hydro","🗺️ دراسة هيدروجيولوجية"],["other","أخرى"]],d:"sev"},
+  {k:"company",l:"الجهة / الشركة"},
+  {t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"status",l:"الحالة",t:"chips",o:[["plan","مخطط"],["run","جارٍ"],["done","منجز"]],d:"plan"}]},
+  {t:"row",f:[{k:"cost",l:"التكلفة",num:true},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"}]},
+  {t:"h",l:"النتائج"},
+  {t:"row",f:[{k:"depth",l:"العمق المستهدف",p:"100–150 م"},{k:"aquifer",l:"الطبقة المائية"}]},
+  {t:"row",f:[{k:"point",l:"النقطة / الإحداثيات",p:"33.xx, 10.xx"},{k:"salinity",l:"الملوحة المتوقعة",p:"غ/ل"}]},
+  {k:"conf",l:"ثقتك في النتيجة",t:"chips",o:SC,numv:true},
+  {k:"result",l:"الخلاصة",t:"area"},{k:"reco",l:"التوصية",t:"area"},{k:"notes",l:"ملاحظات / مكان الملف",t:"area"}
+];
+const WREAD_FIELDS=[{k:"date",l:"التاريخ",t:"date"},{t:"row",f:[{k:"stat",l:"المستوى الساكن (م)",num:true},{k:"dyn",l:"المستوى الحركي (م)",num:true}]},{t:"row",f:[{k:"flow",l:"الصبيب (م³/س)",num:true},{k:"sal",l:"الملوحة (غ/ل)",num:true}]},{k:"notes",l:"ملاحظات",t:"area"}];
+const wellMain=()=>S.data.fitem["well-main"]||{sec:"well",stage:"explore",steps:{}};
+function editWex(slot){
+  const id="wex-"+slot; const x=S.data.fitem[id]||{sec:"wex"};
+  formSheet({title:"🔎 الاستكشاف "+slot, fields:WEX_FIELDS, obj:x,
+    onDelete: S.data.fitem[id]? ()=>confirmSheet("إفراغ هذه الخانة؟",()=>del("fitem",id)) : null,
+    onSave:o=>put("fitem",id,Object.assign({},x,o,{sec:"wex",created:x.created||Date.now()}))});
+}
+function editWread(id){
+  const x=id?S.data.fitem[id]:{sec:"wread",date:todayKey()};
+  formSheet({title:"💧 قراءة البئر", fields:WREAD_FIELDS, obj:x, onDelete:id?()=>confirmSheet("حذف القراءة؟",()=>del("fitem",id)):null,
+    onSave:o=>put("fitem",id||uid(),Object.assign({},x,o,{sec:"wread",created:x.created||Date.now()}))});
+}
+function renderWell(){
+  const W=wellMain(); const si=WSTAGES.findIndex(s=>s[0]===(W.stage||"explore"));
+  const cur=WSTAGES[si][0]; const steps=(W.steps&&W.steps[cur])||WSTEPS[cur].map(t=>({t,done:false}));
+  const M={sev:"⚡ SEV كهربائي",tdem:"🧲 TDEM كهرومغناطيسي",ai:"🤖 أقمار / ذكاء اصطناعي",seismic:"📈 زلزالي",hydro:"🗺️ هيدروجيولوجية",other:"أخرى"};
+  const ST={plan:"مخطط",run:"جارٍ",done:"منجز"};
+  const ex=[1,2,3].map(n=>[n,S.data.fitem["wex-"+n]]);
+  const exCost={}; ex.forEach(([n,x])=>{ if(x&&x.cost) exCost[x.cur||"TND"]=(exCost[x.cur||"TND"]||0)+x.cost; });
+  const reads=fitems("wread").sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  return `<div class="card"><b>مراحل البئر</b><div class="small muted">اضغط على مرحلة لتجعلها الحالية</div>
+   <div class="stages">${WSTAGES.map(([k,i,l],j)=>`<button class="${j<si?"done":j===si?"cur":""}" data-wstage="${k}"><b>${j<si?"✓":i}</b>${l}</button>`).join("")}</div></div>
+  <div class="sec-h"><h2>🔎 الاستكشاف</h2>${Object.keys(exCost).length?`<span class="small muted">${Object.entries(exCost).map(([c,v])=>money(v,c)).join(" + ")}</span>`:""}</div>
+  ${ex.map(([n,x])=> x ? `<div class="card wex st-${x.status||"plan"}" data-wex="${n}" style="cursor:pointer"><div class="vcard"><span class="ic">${n}</span><div class="t"><b>${M[x.method||"other"]}</b><span class="small muted">${esc([x.company, ST[x.status||"plan"], x.date&&fmtShort.format(parseKey(x.date))].filter(Boolean).join(" · "))}</span></div>${x.conf?`<span class="stars">${stars(+x.conf)}</span>`:""}</div>
+     ${(x.depth||x.aquifer||x.point)?`<div class="pills">${x.depth?`<span class="pill">⬇️ ${esc(x.depth)}</span>`:""}${x.aquifer?`<span class="pill">${esc(x.aquifer)}</span>`:""}${x.point?`<span class="pill">📍 ${esc(x.point)}</span>`:""}</div>`:""}
+     ${x.result?`<div class="small" style="margin-top:8px;white-space:pre-wrap;line-height:1.7">${esc(x.result)}</div>`:""}${x.reco?`<div class="small" style="margin-top:6px;color:var(--acc);white-space:pre-wrap">👉 ${esc(x.reco)}</div>`:""}</div>`
+     : `<div class="card wex" data-wex="${n}" style="cursor:pointer;text-align:center;color:var(--muted)">➕ خانة الاستكشاف ${n}<div class="small">اضغط لإضافة دراسة</div></div>`).join("")}
+  <div class="sec-h"><h2>${WSTAGES[si][1]} خطوات مرحلة ${WSTAGES[si][2]}</h2><button class="btn ghost sm" data-wstep-add="1">+ خطوة</button></div>
+  <div class="card" style="padding:4px 12px">${steps.map((s,i)=>`<div class="ck ${s.done?"on":""}" data-wstep="${i}"><button class="chk ${s.done?"on":""}">${s.done?"✓":""}</button><span>${esc(s.t)}</span></div>`).join("")}</div>
+  <div class="sec-h"><h2>💧 القراءات</h2><button class="btn ghost sm" data-new-wread="1">+ قراءة</button></div>
+  <div class="card" style="padding:4px 12px">${reads.length?reads.map(r=>`<div class="logrow" data-edit-wread="${r.id}"><span class="ic">💧</span><div class="t"><b>${[r.stat!=null&&r.stat!==""&&"ساكن "+r.stat+" م", r.dyn!=null&&r.dyn!==""&&"حركي "+r.dyn+" م"].filter(Boolean).join(" · ")||"قراءة"}</b><div class="meta">${[r.date&&fmtShort.format(parseKey(r.date)), r.flow&&r.flow+" م³/س", r.sal&&r.sal+" غ/ل"].filter(Boolean).join(" · ")}</div></div></div>`).join(""):`<div class="empty">بعد الحفر: سجّل المستوى الساكن والحركي والصبيب والملوحة.</div>`}</div>`;
+}
+function setWell(patch){ put("fitem","well-main",Object.assign({},wellMain(),patch,{sec:"well"})); }
+
+/* ---------- remote irrigation ---------- */
+const RZ_FIELDS=()=>[{k:"name",l:"القطاع",p:"مثلاً: قطاع الفستق 1"},{k:"parcel",l:"القطعة",t:"select",o:parcelOpts()},
+  {t:"row",f:[{k:"valve",l:"الصمام / المرحّل",p:"V1"},{k:"emit",l:"نوع التنقيط",p:"4 ل/س × 2 لكل شجرة"}]},
+  {t:"row",f:[{k:"flow",l:"الصبيب (م³/س)",num:true},{k:"area",l:"المساحة (هكتار)",num:true}]},
+  {t:"h",l:"البرنامج المقترح"},
+  {k:"days",l:"الأيام",t:"chips",o:[["all","كل يوم"],["alt","يوم بعد يوم"],["2w","مرتين أسبوعياً"],["1w","مرة أسبوعياً"]],d:"alt"},
+  {t:"row",f:[{k:"start",l:"البداية",t:"time"},{k:"mins",l:"المدة (دقيقة)",num:true,raw:true}]},
+  {k:"notes",l:"ملاحظات",t:"area"}];
+const RHW_FIELDS=[{k:"name",l:"القطعة / الجهاز"},{k:"st",l:"الحالة",t:"chips",o:[["need","مطلوب"],["chosen","تم الاختيار"],["bought","تم الشراء"],["installed","مركّب"]],d:"need"},
+  {t:"row",f:[{k:"model",l:"الماركة / الموديل"},{k:"qty",l:"العدد",num:true,raw:true}]},{t:"row",f:[{k:"cost",l:"التكلفة التقديرية",num:true},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"}]},{k:"notes",l:"ملاحظات / رابط",t:"area"}];
+const RDEV_FIELDS=[{k:"name",l:"الجهاز",p:"كاميرا المدخل / وحدة الري"},{k:"type",l:"النوع",t:"chips",o:[["irr","💧 ري"],["cam","📷 كاميرا"],["pump","⚙️ مضخة"],["sensor","🌡️ حساس"],["net","📶 راوتر"],["power","☀️ طاقة"]],d:"irr"},
+  {t:"row",f:[{k:"app",l:"التطبيق",p:"اسم تطبيق الجهاز"},{k:"url",l:"الرابط",p:"https://…"}]},{k:"notes",l:"ملاحظات (بدون كلمات سر)",t:"area"}];
+const RHW_SEED=[["وحدة تحكم ري ذكية متصلة بالإنترنت","need"],["صمامات كهربائية (سولينويد) لكل قطاع","need"],["مرحّل ذكي لتشغيل المضخة","need"],["عداد مياه رقمي","need"],["حساسات رطوبة التربة","need"],["محطة طقس صغيرة / حساس حرارة","need"],["راوتر 4G + شريحة بيانات","need"],["ألواح شمسية + بطارية + منظم","need"],["كاميرات IP خارجية","need"],["خزان وفلاتر رئيسية","need"]];
+function editRItem(sec,id){
+  const F={rzone:RZ_FIELDS(),rhw:RHW_FIELDS,rdev:RDEV_FIELDS}[sec]; const T={rzone:"💧 قطاع ري",rhw:"🧰 معدة",rdev:"📡 جهاز"}[sec];
+  const x=id?S.data.fitem[id]:{sec};
+  formSheet({title:T, fields:F, obj:x, required:"name", onDelete:id?()=>confirmSheet("حذف؟",()=>del("fitem",id)):null,
+    onSave:o=>{ if(o.url && !/^https?:\/\//i.test(o.url)) o.url="https://"+o.url; put("fitem",id||uid(),Object.assign({},x,o,{sec,created:x.created||Date.now()})); }});
+}
+function renderRemote(){
+  const Z=fitems("rzone"), H=fitems("rhw"), D=fitems("rdev");
+  const perWeek={all:7,alt:3.5,"2w":2,"1w":1};
+  const wk=Z.reduce((s,z)=>s+(+z.flow||0)*((+z.mins||0)/60)*(perWeek[z.days||"alt"]||0),0);
+  const HS={need:"مطلوب",chosen:"تم الاختيار",bought:"تم الشراء",installed:"✅ مركّب"};
+  const hc={}, hs={}; H.forEach(x=>{ if(x.cost){ const b=x.st==="bought"||x.st==="installed"?hs:hc; b[x.cur||"TND"]=(b[x.cur||"TND"]||0)+x.cost*(+x.qty||1); } });
+  const fmtS=o=>Object.keys(o).length?Object.entries(o).map(([c,v])=>money(v,c)).join(" + "):"0";
+  const inst=H.filter(x=>x.st==="installed").length;
+  const TI={irr:"💧",cam:"📷",pump:"⚙️",sensor:"🌡️",net:"📶",power:"☀️"};
+  return `<div class="card" style="border-color:var(--gold)"><b>📡 مرحلة التجهيز</b><p class="small muted" style="margin:6px 0 0;line-height:1.8">صمّم هنا قطاعات الري وبرامجها، وجهّز قائمة المعدات. بعد تركيب الأجهزة في المزرعة (إنترنت + كهرباء + وحدة تحكم ذكية) تُضاف أزرار التشغيل المباشر.</p>
+   <div class="pills"><span class="pill">${inst} / ${H.length} معدات مركّبة</span><span class="pill">${Z.length} قطاعات</span>${wk?`<span class="pill">≈ ${fmtN.format(Math.round(wk))} م³ / أسبوع</span>`:""}</div></div>
+  <div class="sec-h"><h2>💧 قطاعات الري</h2><button class="btn ghost sm" data-new-ritem="rzone">+ قطاع</button></div>
+  <div class="card" style="padding:4px 12px">${Z.length?Z.map(z=>{ const d={all:"كل يوم",alt:"يوم بعد يوم","2w":"مرتين أسبوعياً","1w":"مرة أسبوعياً"}[z.days||"alt"]; const v=(+z.flow||0)*((+z.mins||0)/60);
+    return `<div class="logrow" data-edit-ritem="${z.id}"><span class="ic">💧</span><div class="t"><b>${esc(z.name)}${z.valve?" · "+esc(z.valve):""}</b><div class="meta">${esc([z.parcel&&pName(z.parcel), d, z.start, z.mins&&z.mins+" دقيقة"].filter(Boolean).join(" · "))}</div></div>${v?`<span class="c">${fmtN.format(Math.round(v*10)/10)} م³</span>`:""}</div>`; }).join(""):`<div class="empty">قسّم المزرعة إلى قطاعات ري، لكل قطاع صمام وبرنامج (الأيام، الساعة، المدة).</div>`}</div>
+  <div class="sec-h"><h2>🧰 المعدات المطلوبة</h2><button class="btn ghost sm" data-new-ritem="rhw">+ معدة</button></div>
+  ${H.length?`<div class="msum"><div class="stat out"><b style="font-size:15px">${fmtS(hs)}</b><span>ما اشتُري</span></div><div class="stat"><b style="font-size:15px">${fmtS(hc)}</b><span>المتبقي (تقديري)</span></div></div>`:""}
+  <div class="card" style="padding:4px 12px">${H.length?["need","chosen","bought","installed"].map(s=>H.filter(x=>(x.st||"need")===s).map(x=>`<div class="logrow" data-edit-ritem="${x.id}"><span class="ic">${s==="installed"?"✅":s==="bought"?"🛒":s==="chosen"?"🔖":"⬜"}</span><div class="t"><b>${esc(x.name)}</b><div class="meta">${esc([HS[s], x.model, x.qty&&"× "+x.qty].filter(Boolean).join(" · "))}</div></div>${x.cost?`<span class="c">${money(x.cost*(+x.qty||1),x.cur||"TND")}</span>`:""}</div>`).join("")).join("")
+    :`<div class="empty">قائمة بما يلزم لتشغيل الري والمراقبة عن بعد.<br><br><button class="btn sm" id="seedRhw">+ قائمة المعدات الأساسية</button></div>`}</div>
+  <div class="sec-h"><h2>📲 الأجهزة والتطبيقات</h2><button class="btn ghost sm" data-new-ritem="rdev">+ جهاز</button></div>
+  <div class="card" style="padding:4px 12px">${D.length?D.map(d=>`<div class="logrow"><span class="ic">${TI[d.type]||"📡"}</span><div class="t" data-edit-ritem="${d.id}"><b>${esc(d.name)}</b><div class="meta">${esc(d.app||"")}</div></div>${d.url?`<a class="btn sm" href="${esc(d.url)}" target="_blank" rel="noopener" style="text-decoration:none">فتح</a>`:""}</div>`).join(""):`<div class="empty">بعد التركيب: أضف كل جهاز مع رابط تطبيقه أو صفحته، لتفتحه من هنا مباشرة.</div>`}</div>
+  <div class="card" style="opacity:.75"><b>⚡ التشغيل المباشر</b><p class="small muted" style="margin:6px 0 0">سيُفعّل بعد اختيار وحدة التحكم وتركيبها: تشغيل/إيقاف كل قطاع، وتشغيل المضخة، ورؤية حالة الري.</p></div>`;
+}
+
 function renderFarm(){
-  const seg=`<div class="seg"><button data-fv="sum" class="${UI.fv==="sum"?"on":""}">ملخص</button><button data-fv="parcels" class="${UI.fv==="parcels"?"on":""}">القطع</button><button data-fv="log" class="${UI.fv==="log"?"on":""}">السجل</button><button data-fv="workers" class="${UI.fv==="workers"?"on":""}">العمال</button></div>`;
+  const NAV=[["sum","📊 ملخص"],["parcels","🗺️ القطع"],["log","📋 السجل"],["well","🚰 البئر"],["remote","📡 التحكم عن بعد"]].concat(Object.entries(FSEC).map(([k,v])=>[k,v.ic+" "+v.l])).concat([["workers","👷 العمال"]]);
+  const seg=`<div class="fnav" id="fnav">${NAV.map(([k,l])=>`<button class="chip ${UI.fv===k?"on":""}" data-fv="${k}">${l}</button>`).join("")}</div>`;
+  if(UI.fv==="well") return headerHTML("المزرعة","البطومة — تطاوين") + seg + renderWell();
+  if(UI.fv==="remote") return headerHTML("المزرعة","البطومة — تطاوين") + seg + renderRemote();
+  if(FSEC[UI.fv]) return headerHTML("المزرعة","البطومة — تطاوين") + seg + (UI.fitem && S.data.fitem[UI.fitem] ? renderFItem(UI.fitem) : renderFSec(UI.fv));
   const P=farmP(), L=farmL(), W=farmW(), t=todayKey(), yr=t.slice(0,4);
   let body="";
   if(UI.fv==="sum"){
@@ -1062,7 +1270,10 @@ function renderFarm(){
     const owed=W.map(w=>({w,b:wBalance(w.id)})).filter(x=>x.b.owed>0);
     const planned=L.filter(isPlanned).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const lastIrr=P.map(p=>{ const l=L.find(x=>x.kind==="irrig"&&x.parcel===p.id&&x.done!==false&&x.date<=t); return {p, d:l?-daysTo(l.date):null}; }).filter(x=>x.p.irrig&&x.p.irrig!=="rain"&&x.p.irrig!=="none");
-    body=`<div class="stats"><div class="stat"><b>${fmtN.format(area)}</b><span>هكتار</span></div><div class="stat"><b>${P.length}</b><span>قطعة</span></div><div class="stat"><b>${fmtN.format(trees)}</b><span>شجرة</span></div></div>
+    const treesR=fitems("trees").reduce((s,x)=>s+(fCount(x)||0),0); const sheepN=fitems("sheep").reduce((s,x)=>s+(fCount(x)||0),0); const poulN=fitems("poultry").reduce((s,x)=>s+(fCount(x)||0),0);
+    const WM=wellMain(); const ws=WSTAGES.find(s=>s[0]===(WM.stage||"explore"));
+    body=`<div class="stats"><div class="stat"><b>${fmtN.format(area)}</b><span>هكتار</span></div><div class="stat"><b>${P.length}</b><span>قطعة</span></div><div class="stat"><b>${fmtN.format(treesR||trees)}</b><span>شجرة</span></div></div>
+    <div class="pills" style="margin:10px 0 2px"><span class="pill" data-fv="well" style="cursor:pointer">🚰 البئر: ${ws[2]}</span>${sheepN?`<span class="pill" data-fv="sheep" style="cursor:pointer">🐑 ${fmtN.format(sheepN)}</span>`:""}${poulN?`<span class="pill" data-fv="poultry" style="cursor:pointer">🐔 ${fmtN.format(poulN)}</span>`:""}</div>
     <div class="msum" style="margin-top:12px"><div class="stat out"><b style="font-size:16px">${fmtS(cost)}</b><span>تكاليف ${yr}</span></div><div class="stat"><b style="font-size:16px">${fmtS(inc)}</b><span>مداخيل ${yr}</span></div></div>
     ${planned.length?`<div class="sec-h"><h2>📌 أعمال مخطط لها</h2></div><div class="card" style="padding:4px 12px">${planned.slice(0,8).map(flogRow).join("")}</div>`:""}
     ${owed.length?`<div class="sec-h"><h2>💵 مستحقات العمال</h2></div><div class="card" style="padding:4px 12px">${owed.map(({w,b})=>`<div class="logrow" data-wk="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><div class="meta">${b.days} يوم عمل</div></div><span class="c" style="color:var(--warn)">${money(b.owed,w.cur||"TND")}</span></div>`).join("")}</div>`:""}
@@ -1114,7 +1325,7 @@ function renderToday(){
     <div class="stat"><b>${Object.keys(S.data.notes).length}</b><span>مذكرة</span></div>
   </div>
   ${(()=>{const lb=lastBackupDays(); const n=countItems(); return n>=5 && (lb==null||lb>=14)?`<div class="card" style="display:flex;align-items:center;gap:10px;border-color:var(--gold)"><span style="font-size:22px">💾</span><div style="flex:1" class="small">${lb==null?"لم تأخذ نسخة احتياطية بعد.":"آخر نسخة احتياطية قبل "+lb+" يوم."} بياناتك على هذا الهاتف فقط.</div><button class="btn sm" id="bkNow">نسخة الآن</button></div>`:"";})()}
-  ${(()=>{const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-edit-flog="${a.id}"><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
+  ${(()=>{const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" ${a.fitem?`data-fitem="${a.fitem}" data-fsec="${a.sec}"`:`data-edit-flog="${a.id}"`}><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
   ${(()=>{const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${(()=>{const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${todayHol?holBanner(todayHol):""}
@@ -1310,7 +1521,7 @@ function addSamples(){
 
 /* ---------- events ---------- */
 $("#tabs").onclick=e=>{ const b=e.target.closest("button"); if(!b) return; if(UI.tab==="cars" && b.dataset.tab==="cars") UI.veh=null; if(UI.tab==="kids" && b.dataset.tab==="kids") UI.kid=null; UI.tab=b.dataset.tab; if(UI.tab==="plan") UI.sel=UI.sel||todayKey(); window.scrollTo(0,0); render(); };
-fab.onclick=()=>{ if(UI.tab==="farm"){ if(UI.fv==="parcels") editParcel(); else if(UI.fv==="workers") editWorker(); else editFlog(); return; }
+fab.onclick=()=>{ if(UI.tab==="farm"){ if(UI.fv==="parcels") editParcel(); else if(UI.fv==="workers") editWorker(); else if(UI.fv==="well") editWread(); else if(UI.fv==="remote") editRItem("rzone"); else if(FSEC[UI.fv]){ if(UI.fitem&&S.data.fitem[UI.fitem]) editFev(null,UI.fitem); else editFItem(UI.fv); } else editFlog(); return; }
   if(UI.tab==="kids"){ if(UI.kid && S.data.kids[UI.kid]){ if(UI.kv==="info") editKid(UI.kid); else pickKrec(UI.kid, UI.kv); } else editKid(); return; }
   if(UI.tab==="cars"){ if(UI.vv==="cmp") editCand(); else if(UI.vv==="mods") editMod(); else if(UI.veh && S.data.vehicles[UI.veh]) editLog(null,UI.veh); else editVehicle(); return; }
   if(UI.tab==="notes") editNote(); else if(UI.tab==="programs") editRoutine(); else if(UI.tab==="money") editExpense();
@@ -1343,7 +1554,22 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-day]")){ UI.sel=b.dataset.day; render(); return; }
   if(b=g("[data-week]")){ const v=+b.dataset.week; UI.weekOff = v===0?0:UI.weekOff+v; UI.sel = v===0?todayKey():keyOf(weekStart(UI.weekOff)); render(); return; }
   if(b=g("[data-pv]")){ UI.planView=b.dataset.pv; render(); return; }
-  if(b=g("[data-fv]")){ UI.fv=b.dataset.fv; render(); return; }
+  if(b=g("[data-fitem]")){ UI.tab="farm"; if(b.dataset.fsec) UI.fv=b.dataset.fsec; UI.fitem=b.dataset.fitem; window.scrollTo(0,0); render(); return; }
+  if(g("[data-fitem-back]")){ UI.fitem=null; render(); return; }
+  if(b=g("[data-fv]")){ UI.fv=b.dataset.fv; UI.fitem=null; render(); const n=$("#fnav .chip.on"); if(n) n.scrollIntoView({inline:"center",block:"nearest"}); return; }
+  if(b=g("[data-new-fitem]")){ editFItem(b.dataset.newFitem); return; }
+  if(b=g("[data-edit-fitem]")){ const x=S.data.fitem[b.dataset.editFitem]; if(x) editFItem(x.sec,b.dataset.editFitem); return; }
+  if(b=g("[data-new-fev]")){ editFev(null,b.dataset.newFev); return; }
+  if(b=g("[data-edit-fev]")){ editFev(b.dataset.editFev); return; }
+  if(b=g("[data-wstage]")){ setWell({stage:b.dataset.wstage}); return; }
+  if(b=g("[data-wex]")){ editWex(b.dataset.wex); return; }
+  if(b=g("[data-wstep]")){ const W=wellMain(); const st=W.stage||"explore"; const L=((W.steps&&W.steps[st])||WSTEPS[st].map(t=>({t,done:false}))).map(x=>Object.assign({},x)); const i=+b.dataset.wstep; L[i].done=!L[i].done; setWell({steps:Object.assign({},W.steps||{},{[st]:L})}); return; }
+  if(g("[data-wstep-add]")){ formSheet({title:"خطوة جديدة",fields:[{k:"t",l:"الخطوة"}],obj:{},required:"t",onSave:o=>{ const W=wellMain(); const st=W.stage||"explore"; const L=((W.steps&&W.steps[st])||WSTEPS[st].map(t=>({t,done:false}))).concat([{t:o.t,done:false}]); setWell({steps:Object.assign({},W.steps||{},{[st]:L})}); }}); return; }
+  if(g("[data-new-wread]")){ editWread(); return; }
+  if(b=g("[data-edit-wread]")){ editWread(b.dataset.editWread); return; }
+  if(b=g("[data-new-ritem]")){ editRItem(b.dataset.newRitem); return; }
+  if(b=g("[data-edit-ritem]")){ const x=S.data.fitem[b.dataset.editRitem]; if(x) editRItem(x.sec,b.dataset.editRitem); return; }
+  if(g("#seedRhw")){ const t=Date.now(); RHW_SEED.forEach(([n,s],i)=>put("fitem",uid(),{sec:"rhw",name:n,st:s,cur:"TND",created:t+i})); toast("أُضيفت قائمة المعدات"); return; }
   if(b=g("[data-fp-go]")){ UI.fp=b.dataset.fpGo; UI.fv="log"; render(); return; }
   if(b=g("[data-fp]")){ UI.fp=b.dataset.fp; render(); return; }
   if(b=g("[data-edit-parcel]")){ editParcel(b.dataset.editParcel); return; }
