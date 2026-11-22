@@ -1,5 +1,5 @@
 // دفتري — يعمل دون إنترنت
-const CACHE = "daftar-v11";
+const CACHE = "daftar-v12";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -12,8 +12,8 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match(req, {ignoreSearch: true}).then(r => r || caches.match("index.html"))));
     return;
   }
-  // fonts: cache first
-  if (url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com")) {
+  // fonts and satellite tiles: cache first (works offline after first view)
+  if (url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") || url.hostname === "server.arcgisonline.com") {
     e.respondWith(caches.match(req).then(r => r || fetch(req).then(res => { const cp = res.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return res; })));
   }
 });

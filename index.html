@@ -1329,21 +1329,30 @@ function mapImportSheet(pms){
       if(v==="new") put("farmp",uid(),{name:pm.name,area,areaCalc:area,geo,status:"active",created:Date.now()+i}); else { const x=S.data.farmp[v]; put("farmp",v,Object.assign({},x,{geo,areaCalc:area,area:x.area||area})); } n++; });
     closeSheet(); toast("تم استيراد "+qit(n)); };
 }
+const SAT_OK=true;
+const SAT_URL=(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+function mercPx(lon,lat,z){ const s=256*Math.pow(2,z); const r=Math.max(-85,Math.min(85,lat))*Math.PI/180; return [(lon+180)/360*s, (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*s]; }
 function renderMap(){
   const all=farmP(), P=all.filter(p=>Array.isArray(p.geo)&&p.geo.length>=3), none=all.filter(p=>!(Array.isArray(p.geo)&&p.geo.length>=3));
   const imp=`<label class="btn sm" style="display:inline-block">📥 استيراد KML / KMZ / GeoJSON<input type="file" id="mapImp" accept=".kml,.kmz,.geojson,.json" hidden></label>`;
   if(!P.length) return `<div class="card empty">ارسم حدود قطعك في Google Earth أو QGIS، ثم احفظها كملف KML أو KMZ واستوردها هنا، فتظهر خريطة المزرعة بالقطع ومساحاتها المحسوبة.<br><br>${imp}</div>`;
   let x0=180,x1=-180,y0=90,y1=-90; P.forEach(p=>p.geo.forEach(([x,y])=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }));
-  const kx=Math.cos((y0+y1)/2*Math.PI/180), sx=Math.max((x1-x0)*kx,1e-7), sy=Math.max(y1-y0,1e-7), pad=30;
-  const sc=Math.min((1000-2*pad)/sx,(1100-2*pad)/sy), W=sx*sc+2*pad, H=sy*sc+2*pad, fs=Math.max(W,H)/42;
-  const X=x=>pad+(x-x0)*kx*sc, Y=y=>pad+(y1-y)*sc;
-  const widthKm=sx*111.32;
+  const sat=SAT_OK && settings().mapSat!==false;
+  let z=19; for(;z>2;z--){ const a=mercPx(x0,y1,z), b=mercPx(x1,y0,z); if(b[0]-a[0]<=900 && b[1]-a[1]<=1000) break; }
+  const tl=mercPx(x0,y1,z), br=mercPx(x1,y0,z), pad=40;
+  const ox=tl[0]-pad, oy=tl[1]-pad, W=(br[0]-tl[0])+2*pad, H=(br[1]-tl[1])+2*pad, fs=Math.max(W,H)/40;
+  const PX=(lon,lat)=>{ const q=mercPx(lon,lat,z); return [q[0]-ox,q[1]-oy]; };
+  let tiles="";
+  if(sat){ const n=Math.pow(2,z); for(let tx=Math.floor(ox/256); tx<=Math.floor((ox+W)/256); tx++) for(let ty=Math.floor(oy/256); ty<=Math.floor((oy+H)/256); ty++){ if(ty<0||ty>=n) continue; tiles+=`<image href="${SAT_URL(z,((tx%n)+n)%n,ty)}" x="${tx*256-ox}" y="${ty*256-oy}" width="256" height="256" preserveAspectRatio="none"/>`; } }
   const crops={}; P.forEach(p=>{ const c=p.crop||"بدون محصول"; crops[c]=(crops[c]||0)+(+p.areaCalc||+p.area||0); });
-  return `<div class="card" style="padding:6px"><svg viewBox="0 0 ${Math.round(W)} ${Math.round(H)}" style="width:100%;height:auto;display:block;background:#efe9dd;border-radius:10px" direction="rtl">
-    ${P.map(p=>`<polygon data-map-parcel="${p.id}" points="${p.geo.map(([x,y])=>X(x).toFixed(1)+","+Y(y).toFixed(1)).join(" ")}" fill="${cropColor(p.crop)}" fill-opacity=".5" stroke="${cropColor(p.crop)}" stroke-width="${fs/6}" style="cursor:pointer"/>`).join("")}
-    ${P.map(p=>{ const cx=p.geo.reduce((s,q)=>s+X(q[0]),0)/p.geo.length, cy=p.geo.reduce((s,q)=>s+Y(q[1]),0)/p.geo.length; const a=+p.areaCalc||+p.area||0;
-      return `<text data-map-parcel="${p.id}" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="${fs.toFixed(1)}" text-anchor="middle" font-weight="700" fill="#1f2a2e" stroke="#fff" stroke-width="${(fs/5).toFixed(1)}" paint-order="stroke" style="cursor:pointer">${esc(p.name)}<tspan x="${cx.toFixed(1)}" dy="${(fs*1.15).toFixed(1)}" font-size="${(fs*.8).toFixed(1)}" font-weight="500">${fmtN.format(Math.round(a*10)/10)} هـ</tspan></text>`; }).join("")}
-  </svg><div class="small muted" style="display:flex;justify-content:space-between;padding:6px 4px 2px"><span>⬆️ الشمال</span><span>عرض الخريطة ≈ ${fmtN.format(Math.round(widthKm*10)/10)} كم</span></div></div>
+  const widthKm=(x1-x0)*111.32*Math.cos((y0+y1)/2*Math.PI/180);
+  return `<div class="card" style="padding:6px"><svg viewBox="0 0 ${Math.round(W)} ${Math.round(H)}" style="width:100%;height:auto;display:block;background:${sat?"#5a5a4a":"#efe9dd"};border-radius:10px" direction="rtl">
+    ${tiles}
+    ${P.map(p=>`<polygon data-map-parcel="${p.id}" points="${p.geo.map(([x,y])=>PX(x,y).map(v=>v.toFixed(1)).join(",")).join(" ")}" fill="${cropColor(p.crop)}" fill-opacity="${sat?".25":".5"}" stroke="${sat?"#ffd84d":cropColor(p.crop)}" stroke-width="${(fs/5).toFixed(1)}" style="cursor:pointer"/>`).join("")}
+    ${P.map(p=>{ const pts=p.geo.map(([x,y])=>PX(x,y)); const cx=pts.reduce((s,q)=>s+q[0],0)/pts.length, cy=pts.reduce((s,q)=>s+q[1],0)/pts.length; const a=+p.areaCalc||+p.area||0;
+      return `<text data-map-parcel="${p.id}" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="${fs.toFixed(1)}" text-anchor="middle" font-weight="700" fill="#1f2a2e" stroke="#fff" stroke-width="${(fs/4).toFixed(1)}" paint-order="stroke" style="cursor:pointer">${esc(p.name)}<tspan x="${cx.toFixed(1)}" dy="${(fs*1.15).toFixed(1)}" font-size="${(fs*.8).toFixed(1)}" font-weight="500">${fmtN.format(Math.round(a*10)/10)} هـ</tspan></text>`; }).join("")}
+  </svg><div class="small muted" style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 4px 2px;flex-wrap:wrap"><span>⬆️ الشمال · العرض ≈ ${fmtN.format(Math.round(widthKm*10)/10)} كم</span>${SAT_OK?`<button class="btn ghost sm" id="mapSat">${sat?"🗺️ بدون صورة":"🛰️ صورة القمر الصناعي"}</button>`:""}</div>
+  ${sat?`<div class="small muted" style="padding:0 4px 4px;font-size:11px">صور الأقمار الصناعية: Esri, Maxar, Earthstar Geographics · تحتاج إنترنت أول مرة، ثم تُحفظ للعرض دون اتصال</div>`:""}</div>
   <div class="card"><b>حسب المحصول</b>${Object.entries(crops).sort((a,b)=>b[1]-a[1]).map(([c,a])=>`<div class="catrow"><span style="width:14px;height:14px;border-radius:4px;background:${cropColor(c==="بدون محصول"?"":c)};flex:none"></span><span class="nm" style="flex:1;width:auto">${esc(c)}</span><span class="v">${fmtN.format(Math.round(a*100)/100)} هـ</span></div>`).join("")}
    <div class="small muted" style="margin-top:6px">المجموع: ${fmtN.format(Math.round(Object.values(crops).reduce((s,a)=>s+a,0)*100)/100)} هكتار · اضغط أي قطعة لفتحها</div></div>
   ${none.length?`<div class="card small">قطع بلا حدود على الخريطة: ${none.map(p=>esc(p.name)).join("، ")}</div>`:""}
@@ -1742,6 +1751,7 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-fitem]")){ UI.tab="farm"; if(b.dataset.fsec) UI.fv=b.dataset.fsec; UI.fitem=b.dataset.fitem; window.scrollTo(0,0); render(); return; }
   if(g("[data-fitem-back]")){ UI.fitem=null; render(); return; }
   if(g("#farmName")){ editFarmName(); return; }
+  if(g("#mapSat")){ const st=settings(); put("settings","main",Object.assign({},st,{mapSat:st.mapSat===false})); return; }
   if(b=g("[data-map-parcel]")){ editParcel(b.getAttribute("data-map-parcel")); return; }
   if(b=g("[data-wtask-new]")){ editFlog(null,{worker:b.dataset.wtaskNew,done:false}); return; }
   if(b=g("[data-ftask-done]")){ const id=b.dataset.ftaskDone, l=S.data.farml[id]; if(l){ put("farml",id,Object.assign({},l,{done:true})); toast("✓ تمّت المهمة"); } return; }
