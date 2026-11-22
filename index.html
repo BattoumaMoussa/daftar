@@ -268,7 +268,7 @@ const keyOf = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const parseKey = k => { const [y,m,d] = k.split("-").map(Number); return new Date(y,m-1,d); };
 const todayKey = () => keyOf(new Date());
 const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
-function ayam(n){ n=Math.abs(n); return n===1?"يوم واحد":n===2?"يومين":(n>=3&&n<=10)?n+" أيام":n+" يوماً"; }
+function ayam(n){ n=Math.abs(n); return n===0?"0 يوم":n===1?"يوم واحد":n===2?"يومين":(n>=3&&n<=10)?n+" أيام":n+" يوماً"; }
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const DAYS = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 const DAYS_S = ["أحد","إثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
@@ -1010,6 +1010,7 @@ function flogFields(isNew){
    {k:"kind",l:"النوع",t:"chips",o:Object.entries(FLOGK).map(([k,v])=>[k,v[0]+" "+v[1]]),d:"irrig"},
    {k:"title",l:"الوصف",p:"مثلاً: سقي الزيتون 4 ساعات"},
    {k:"parcel",l:"القطعة",t:"select",o:[["all","عام / كل المزرعة"]].concat(farmP().map(x=>[x.id,x.name])),d:UI.fp!=="all"?UI.fp:"all"},
+   {k:"worker",l:"العامل المكلَّف",t:"select",o:[["","—"]].concat(farmW().filter(w=>w.active!=="no").map(w=>[w.id,w.name]))},
    {t:"row",f:[{k:"date",l:"التاريخ",t:"date"},{k:"qty",l:"الكمية",p:"20 م³ / 3 قناطير / 50 شجرة"}]},
    {k:"done",l:"تمّ (أزل العلامة إن كان عملاً مخططاً له)",t:"check",d:true},
    {t:"row",f:[{k:"cost",l:"التكلفة",num:true},{k:"income",l:"الدخل (بيع)",num:true}]},
@@ -1018,8 +1019,8 @@ function flogFields(isNew){
    {k:"notes",l:"ملاحظات",t:"area"}
   ].concat(isNew?[{k:"toExp",l:"سجّل التكلفة / الدخل في المصاريف",t:"check",d:true}]:[]);
 }
-function editFlog(id){
-  const x=id?S.data.farml[id]:{date:todayKey()};
+function editFlog(id,preset){
+  const x=id?S.data.farml[id]:Object.assign({date:todayKey()},preset||{});
   formSheet({title:id?"تعديل العمل":"عمل جديد في المزرعة", fields:flogFields(!id), obj:x, required:"title",
     onDelete: id? ()=>confirmSheet("حذف هذا السجل؟",()=>del("farml",id)) : null,
     onSave:o=>{ const toExp=o.toExp; delete o.toExp; put("farml", id||uid(), Object.assign({},x,o,{created:x.created||Date.now()}));
@@ -1056,13 +1057,14 @@ function editWlog(id, wid, kind){
 function wBalance(wid){ let due=0, paid=0, days=0; farmWL(wid).forEach(x=>{ if(x.kind==="pay") paid+=x.amount||0; else { due+=x.amount||0; days+=x.days||0; } }); return {due, paid, owed:due-paid, days}; }
 function flogRow(l){
   const k=FLOGK[l.kind]||FLOGK.note; const pl=isPlanned(l);
-  const meta=[l.date&&fmtShort.format(parseKey(l.date)), UI.fp==="all"?pName(l.parcel):"", l.qty, l.workers?l.workers+" عمال":"", l.hours].filter(Boolean).join(" · ");
+  const meta=[l.date&&fmtShort.format(parseKey(l.date)), UI.fp==="all"?pName(l.parcel):"", l.worker&&((S.data.farmw||{})[l.worker])&&("👷 "+S.data.farmw[l.worker].name), l.qty, l.workers?l.workers+" عمال":"", l.hours].filter(Boolean).join(" · ");
   const right = l.income? `<span class="c" style="color:var(--acc)">+${money(l.income,l.cur)}</span>` : l.cost? `<span class="c">${money(l.cost,l.cur)}</span>` : "";
   return `<div class="logrow" data-edit-flog="${l.id}" style="${pl?"opacity:.85":""}"><span class="ic">${k[0]}</span><div class="t"><b>${pl?"📌 ":""}${esc(l.title)}</b><div class="meta">${esc(meta)}</div>${l.notes?`<div class="meta">${esc(l.notes.slice(0,120))}</div>`:""}</div>${right}</div>`;
 }
 function farmAlerts(){
   const t=todayKey(); const out=[];
   farmL().filter(l=>isPlanned(l) || (!l.done && l.date<=t)).forEach(l=>{ const d=daysTo(l.date); if(d!=null && d<=7) out.push({id:l.id, txt:`${(FLOGK[l.kind]||FLOGK.note)[0]} ${l.title}${l.parcel&&l.parcel!=="all"?" — "+pName(l.parcel):""}`, d}); });
+  fitems("stock").forEach(x=>{ const n=fCount(x); if(x.min!=null&&x.min!==""&&n<=+x.min) out.push({fitem:x.id, sec:"stock", txt:`📦 ${x.name}: ${fmtN.format(n)} ${x.unit||""}`, d:-99, low:true}); });
   fevs().filter(e=>e.nextDate).forEach(e=>{ const d=daysTo(e.nextDate); const it=S.data.fitem[e.item]; if(!it||!FSEC[it.sec]) return; const k=FSEC[it.sec].ev[e.kind]||["📝",""]; if(d!=null && d>=-3 && d<=7) out.push({fitem:e.item, sec:it.sec, txt:`${k[0]} ${e.title||k[1]} — ${it.name}`, d}); });
   return out.sort((a,b)=>a.d-b.d);
 }
@@ -1092,6 +1094,11 @@ const FSEC = {
     f:()=>[{k:"name",l:"الاسم",p:"جرار / مضخة / مولّد"},{t:"row",f:[{k:"brand",l:"الماركة"},{k:"model",l:"الطراز"}]},{t:"row",f:[{k:"serial",l:"الرقم التسلسلي"},{k:"hours",l:"ساعات العمل / العداد",num:true}]},{t:"row",f:[{k:"price",l:"الثمن",num:true},{k:"bought",l:"تاريخ الشراء",t:"date"}]},{k:"cur",l:"العملة",t:"chips",o:CUR2,d:"TND"},{k:"status",l:"الحالة",t:"chips",o:[["planned","مخطط لشرائها"],["ok","تعمل"],["fault","معطلة"]],d:"ok"},{k:"notes",l:"ملاحظات",t:"area"}],
     sub:x=>[x.brand,x.model,{planned:"مخطط لشرائها",ok:"تعمل",fault:"⚠️ معطلة"}[x.status||"ok"]],
     ev:{maint:["🔧","صيانة"],fault:["⚠️","عطل"],repair:["🛠️","إصلاح"],fuel:["⛽","وقود"],note:["📝","ملاحظة"]}},
+  stock:{ic:"📦",l:"المخزون",count:"qty",countL:"وحدة",unitField:"unit",noTotal:true,
+    f:()=>[{k:"name",l:"المادة",p:"علف / سماد / بذور / زيت زيتون"},{k:"cat",l:"الصنف",t:"chips",o:[["feed","🌾 أعلاف"],["fert","🧪 أسمدة"],["pest","🐛 مبيدات"],["seed","🌱 بذور"],["fuel","⛽ وقود"],["crop","🧺 محاصيل"],["parts","🔩 قطع غيار"],["other","📦 أخرى"]],d:"feed"},
+      {t:"row",f:[{k:"unit",l:"الوحدة",p:"كغ / قنطار / لتر / كيس"},{k:"qty",l:"الكمية الأولية",num:true}]},{t:"row",f:[{k:"min",l:"حدّ التنبيه",num:true},{k:"place",l:"مكان التخزين",p:"المخزن / الغار"}]},{k:"notes",l:"ملاحظات",t:"area"}],
+    sub:x=>[{feed:"أعلاف",fert:"أسمدة",pest:"مبيدات",seed:"بذور",fuel:"وقود",crop:"محاصيل",parts:"قطع غيار",other:"أخرى"}[x.cat||"other"],x.place],
+    ev:{in:["⬇️","إدخال / شراء",1],harvest:["🧺","من الحصاد",1],use:["⬆️","استهلاك",-1],sale:["💰","بيع",-1],loss:["🥀","تلف",-1],note:["📝","ملاحظة"]}},
   sheep:{ic:"🐑",l:"الأغنام والماعز",count:"count",countL:"رأس",
     f:()=>[{k:"name",l:"القطيع",p:"مثلاً: القطيع الأول"},{t:"row",f:[{k:"breed",l:"السلالة",p:"بربري / غربي…"},{k:"count",l:"العدد الأولي",num:true}]},{k:"stable",l:"الإسطبل",t:"select",o:stableOpts()},{k:"notes",l:"ملاحظات",t:"area"}],
     sub:x=>[x.breed,x.stable&&(S.data.fitem[x.stable]||{}).name],
@@ -1141,10 +1148,10 @@ function fevRow(e,S_){
 function renderFSec(sec){
   const S_=FSEC[sec]; const L=fitems(sec);
   const tot=S_.count? L.reduce((s,x)=>s+(fCount(x)||0),0) : null;
-  return `${S_.count&&L.length?`<div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><b>${fmtN.format(tot)}</b><span>${S_.countL}</span></div><div class="stat"><b>${L.length}</b><span>${S_.l}</span></div></div><div style="height:12px"></div>`:""}
+  return `${S_.count&&!S_.noTotal&&L.length?`<div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><b>${fmtN.format(tot)}</b><span>${S_.countL}</span></div><div class="stat"><b>${L.length}</b><span>${S_.l}</span></div></div><div style="height:12px"></div>`:""}
   ${L.length? L.map(x=>{ const n=fCount(x); const E=fevs(x.id); const nx=E.filter(e=>e.nextDate&&e.nextDate>=todayKey()).sort((a,b)=>a.nextDate.localeCompare(b.nextDate))[0];
     return `<div class="card" data-fitem="${x.id}" style="cursor:pointer"><div class="vcard"><span class="ic">${S_.ic}</span><div class="t"><b>${esc(x.name)}</b><span class="small muted">${esc((S_.sub(x)||[]).filter(Boolean).join(" · "))}</span></div><span class="muted">←</span></div>
-    <div class="pills">${n!=null?`<span class="pill">${fmtN.format(n)} ${S_.countL}</span>`:""}${E.length?`<span class="pill">📋 ${E.length}</span>`:""}${nx?`<span class="pill ${daysTo(nx.nextDate)<=7?"warn":""}">📅 ${fmtShort.format(parseKey(nx.nextDate))}</span>`:""}</div></div>`; }).join("")
+    <div class="pills">${n!=null?`<span class="pill ${x.min!=null&&x.min!==""&&n<=+x.min?"warn":""}">${fmtN.format(n)} ${esc((S_.unitField&&x[S_.unitField])||S_.countL)}</span>`:""}${E.length?`<span class="pill">📋 ${E.length}</span>`:""}${nx?`<span class="pill ${daysTo(nx.nextDate)<=7?"warn":""}">📅 ${fmtShort.format(parseKey(nx.nextDate))}</span>`:""}</div></div>`; }).join("")
     + `<div style="text-align:center"><button class="btn ghost sm" data-new-fitem="${sec}">+ إضافة</button></div>`
   : `<div class="card empty">لا شيء في «${S_.l}» بعد.<br><br><button class="btn" data-new-fitem="${sec}">+ إضافة</button></div>`}`;
 }
@@ -1155,7 +1162,7 @@ function renderFItem(id){
     flat.push([f.l,v]); }); walk(S_.f());
   const cost={}; E.forEach(e=>{ if(e.cost) cost[e.cur||"TND"]=(cost[e.cur||"TND"]||0)+e.cost; });
   return `<button class="back" data-fitem-back="1">→ ${S_.l}</button>
-  <div class="card"><div class="vcard"><span class="ic">${S_.ic}</span><div class="t"><b>${esc(x.name)}</b>${n!=null?`<span class="small" style="color:var(--acc);font-weight:700">العدد الحالي: ${fmtN.format(n)} ${S_.countL}</span>`:""}</div><button class="btn ghost sm" data-edit-fitem="${id}">تعديل</button></div>
+  <div class="card"><div class="vcard"><span class="ic">${S_.ic}</span><div class="t"><b>${esc(x.name)}</b>${n!=null?`<span class="small" style="color:${x.min!=null&&x.min!==""&&n<=+x.min?"var(--warn)":"var(--acc)"};font-weight:700">${S_.unitField?"الكمية الحالية":"العدد الحالي"}: ${fmtN.format(n)} ${esc((S_.unitField&&x[S_.unitField])||S_.countL)}</span>`:""}</div><button class="btn ghost sm" data-edit-fitem="${id}">تعديل</button></div>
   ${flat.length?`<div class="kv" style="margin-top:10px">${flat.map(([a,b])=>`<span>${a}</span><span style="white-space:pre-wrap">${esc(b)}</span>`).join("")}</div>`:""}</div>
   <div class="sec-h"><h2>السجل</h2><button class="btn ghost sm" data-new-fev="${id}">+ تسجيل</button></div>
   <div class="card" style="padding:4px 12px">${E.length?E.map(e=>fevRow(e,S_)).join(""):`<div class="empty">سجّل هنا: ${Object.values(S_.ev).slice(0,4).map(v=>v[1]).join("، ")}…</div>`}</div>
@@ -1266,10 +1273,88 @@ function editFarmName(){
   formSheet({title:"🌾 اسم المزرعة", fields:[{k:"farmName",l:"اسم المزرعة",p:"مثلاً: مزرعة الزيتون"},{k:"farmPlace",l:"المكان",p:"المنطقة — الولاية"}], obj:st,
     onSave:o=>put("settings","main",Object.assign({},settings(),{farmName:o.farmName,farmPlace:o.farmPlace}))});
 }
+/* ---------- farm map ---------- */
+const CROP_COLORS=["#2e7d4f","#b8860b","#5b7fb8","#c2541b","#7a5195","#2a9d8f","#e76f51","#8a9a5b"];
+function cropColor(s){ let h=7; for(const ch of String(s||"")) h=(h*31+ch.charCodeAt(0))>>>0; return CROP_COLORS[h%CROP_COLORS.length]; }
+function qit(n){ return n===1?"قطعة واحدة":n===2?"قطعتان":(n>=3&&n<=10)?n+" قطع":n+" قطعة"; }
+function geoArea(ring){ if(!ring||ring.length<3) return 0; const lat0=ring.reduce((s,p)=>s+p[1],0)/ring.length*Math.PI/180; const k=111320*Math.cos(lat0); let a=0; for(let i=0;i<ring.length;i++){ const [x1,y1]=ring[i], [x2,y2]=ring[(i+1)%ring.length]; a+=(x1*k)*(y2*110540)-(x2*k)*(y1*110540); } return Math.abs(a)/2/10000; }
+function simplifyRing(r,max){ max=max||300; if(r.length<=max) return r; const st=r.length/max, o=[]; for(let i=0;i<r.length;i+=st) o.push(r[Math.floor(i)]); return o; }
+async function unzipKml(buf){
+  const dv=new DataView(buf); let e=-1; for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){ e=i; break; } }
+  if(e<0) throw new Error("zip"); const cnt=dv.getUint16(e+10,true); let off=dv.getUint32(e+16,true);
+  for(let n=0;n<cnt;n++){
+    const method=dv.getUint16(off+10,true), csize=dv.getUint32(off+20,true), nl=dv.getUint16(off+28,true), xl=dv.getUint16(off+30,true), cl=dv.getUint16(off+32,true), lho=dv.getUint32(off+42,true);
+    const fname=new TextDecoder().decode(new Uint8Array(buf,off+46,nl));
+    if(/\.kml$/i.test(fname)){
+      const start=lho+30+dv.getUint16(lho+26,true)+dv.getUint16(lho+28,true); const data=new Uint8Array(buf,start,csize);
+      if(method===0) return new TextDecoder().decode(data);
+      if(method===8){ const out=await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer(); return new TextDecoder().decode(out); }
+      throw new Error("method");
+    }
+    off+=46+nl+xl+cl;
+  }
+  throw new Error("nokml");
+}
+function parseKml(txt){
+  const doc=new DOMParser().parseFromString(txt,"application/xml"); const out=[];
+  [...doc.getElementsByTagName("Placemark")].forEach((pm,i)=>{
+    const nmEl=[...pm.children].find(c=>c.localName==="name"); const nm=(nmEl?nmEl.textContent:"")||("قطعة "+(i+1)); let best=null;
+    [...pm.getElementsByTagName("Polygon")].forEach(pg=>{ const ob=pg.getElementsByTagName("outerBoundaryIs")[0]||pg; const c=ob.getElementsByTagName("coordinates")[0]; if(!c) return;
+      const ring=c.textContent.trim().split(/\s+/).map(t=>t.split(",").map(Number)).filter(a=>a.length>=2&&isFinite(a[0])&&isFinite(a[1])).map(a=>[a[0],a[1]]);
+      if(ring.length>=3&&(!best||geoArea(ring)>geoArea(best))) best=ring; });
+    if(best) out.push({name:nm.trim(),ring:best});
+  });
+  return out;
+}
+function parseGeoJSON(txt){ const j=JSON.parse(txt); const F=j.type==="FeatureCollection"?j.features:(j.type==="Feature"?[j]:[]); const out=[];
+  F.forEach((f,i)=>{ const g=f.geometry||{}; let R=[]; if(g.type==="Polygon") R=[g.coordinates[0]]; else if(g.type==="MultiPolygon") R=g.coordinates.map(q=>q[0]); let best=null;
+    R.forEach(r=>{ const rr=r.map(a=>[a[0],a[1]]); if(!best||geoArea(rr)>geoArea(best)) best=rr; }); const pr=f.properties||{};
+    if(best) out.push({name:String(pr.name||pr.Name||pr.NAME||("قطعة "+(i+1))),ring:best}); }); return out; }
+async function importMap(file){
+  try{ const lo=file.name.toLowerCase(); let pms;
+    if(lo.endsWith(".geojson")||lo.endsWith(".json")) pms=parseGeoJSON(await file.text());
+    else { const buf=await file.arrayBuffer(); pms=parseKml(lo.endsWith(".kmz")? await unzipKml(buf) : new TextDecoder().decode(buf)); }
+    if(!pms.length){ toast("لم أجد حدود قطع (مضلّعات) في الملف"); return; }
+    mapImportSheet(pms);
+  }catch(e){ console.warn(e); toast("تعذّرت قراءة الملف"); }
+}
+function mapImportSheet(pms){
+  const P=farmP();
+  openSheet(`<h2>📥 في الملف ${qit(pms.length)}</h2><p class="small muted">لكل قطعة: أنشئ قطعة جديدة، أو اربطها بقطعة موجودة لتضيف لها حدودها.</p>
+   ${pms.map((pm,i)=>{ const m=P.find(p=>(p.name||"").trim()===pm.name); return `<div class="field"><label>${esc(pm.name)} · ${fmtN.format(Math.round(geoArea(pm.ring)*100)/100)} هـ</label><select class="inp" data-pmi="${i}"><option value="new" ${m?"":"selected"}>➕ قطعة جديدة</option><option value="skip">تجاهل</option>${P.map(p=>`<option value="${p.id}" ${m&&m.id===p.id?"selected":""}>ربط بـ: ${esc(p.name)}</option>`).join("")}</select></div>`; }).join("")}
+   <div class="actions"><span></span><div class="r"><button class="btn ghost" id="miX">إلغاء</button><button class="btn" id="miS">استيراد</button></div></div>`);
+  $("#miX").onclick=closeSheet;
+  $("#miS").onclick=()=>{ const sels=[...$("#sheet").querySelectorAll("[data-pmi]")].map(s=>[+s.dataset.pmi,s.value]); let n=0;
+    sels.forEach(([i,v])=>{ if(v==="skip") return; const pm=pms[i]; const geo=simplifyRing(pm.ring).map(([x,y])=>[Math.round(x*1e6)/1e6,Math.round(y*1e6)/1e6]); const area=Math.round(geoArea(pm.ring)*100)/100;
+      if(v==="new") put("farmp",uid(),{name:pm.name,area,areaCalc:area,geo,status:"active",created:Date.now()+i}); else { const x=S.data.farmp[v]; put("farmp",v,Object.assign({},x,{geo,areaCalc:area,area:x.area||area})); } n++; });
+    closeSheet(); toast("تم استيراد "+qit(n)); };
+}
+function renderMap(){
+  const all=farmP(), P=all.filter(p=>Array.isArray(p.geo)&&p.geo.length>=3), none=all.filter(p=>!(Array.isArray(p.geo)&&p.geo.length>=3));
+  const imp=`<label class="btn sm" style="display:inline-block">📥 استيراد KML / KMZ / GeoJSON<input type="file" id="mapImp" accept=".kml,.kmz,.geojson,.json" hidden></label>`;
+  if(!P.length) return `<div class="card empty">ارسم حدود قطعك في Google Earth أو QGIS، ثم احفظها كملف KML أو KMZ واستوردها هنا، فتظهر خريطة المزرعة بالقطع ومساحاتها المحسوبة.<br><br>${imp}</div>`;
+  let x0=180,x1=-180,y0=90,y1=-90; P.forEach(p=>p.geo.forEach(([x,y])=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }));
+  const kx=Math.cos((y0+y1)/2*Math.PI/180), sx=Math.max((x1-x0)*kx,1e-7), sy=Math.max(y1-y0,1e-7), pad=30;
+  const sc=Math.min((1000-2*pad)/sx,(1100-2*pad)/sy), W=sx*sc+2*pad, H=sy*sc+2*pad, fs=Math.max(W,H)/42;
+  const X=x=>pad+(x-x0)*kx*sc, Y=y=>pad+(y1-y)*sc;
+  const widthKm=sx*111.32;
+  const crops={}; P.forEach(p=>{ const c=p.crop||"بدون محصول"; crops[c]=(crops[c]||0)+(+p.areaCalc||+p.area||0); });
+  return `<div class="card" style="padding:6px"><svg viewBox="0 0 ${Math.round(W)} ${Math.round(H)}" style="width:100%;height:auto;display:block;background:#efe9dd;border-radius:10px" direction="rtl">
+    ${P.map(p=>`<polygon data-map-parcel="${p.id}" points="${p.geo.map(([x,y])=>X(x).toFixed(1)+","+Y(y).toFixed(1)).join(" ")}" fill="${cropColor(p.crop)}" fill-opacity=".5" stroke="${cropColor(p.crop)}" stroke-width="${fs/6}" style="cursor:pointer"/>`).join("")}
+    ${P.map(p=>{ const cx=p.geo.reduce((s,q)=>s+X(q[0]),0)/p.geo.length, cy=p.geo.reduce((s,q)=>s+Y(q[1]),0)/p.geo.length; const a=+p.areaCalc||+p.area||0;
+      return `<text data-map-parcel="${p.id}" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="${fs.toFixed(1)}" text-anchor="middle" font-weight="700" fill="#1f2a2e" stroke="#fff" stroke-width="${(fs/5).toFixed(1)}" paint-order="stroke" style="cursor:pointer">${esc(p.name)}<tspan x="${cx.toFixed(1)}" dy="${(fs*1.15).toFixed(1)}" font-size="${(fs*.8).toFixed(1)}" font-weight="500">${fmtN.format(Math.round(a*10)/10)} هـ</tspan></text>`; }).join("")}
+  </svg><div class="small muted" style="display:flex;justify-content:space-between;padding:6px 4px 2px"><span>⬆️ الشمال</span><span>عرض الخريطة ≈ ${fmtN.format(Math.round(widthKm*10)/10)} كم</span></div></div>
+  <div class="card"><b>حسب المحصول</b>${Object.entries(crops).sort((a,b)=>b[1]-a[1]).map(([c,a])=>`<div class="catrow"><span style="width:14px;height:14px;border-radius:4px;background:${cropColor(c==="بدون محصول"?"":c)};flex:none"></span><span class="nm" style="flex:1;width:auto">${esc(c)}</span><span class="v">${fmtN.format(Math.round(a*100)/100)} هـ</span></div>`).join("")}
+   <div class="small muted" style="margin-top:6px">المجموع: ${fmtN.format(Math.round(Object.values(crops).reduce((s,a)=>s+a,0)*100)/100)} هكتار · اضغط أي قطعة لفتحها</div></div>
+  ${none.length?`<div class="card small">قطع بلا حدود على الخريطة: ${none.map(p=>esc(p.name)).join("، ")}</div>`:""}
+  <div style="text-align:center">${imp}</div>`;
+}
+
 function renderFarm(){
-  const NAV=[["sum","📊 ملخص"],["parcels","🗺️ القطع"],["log","📋 السجل"],["well","🚰 البئر"],["remote","📡 التحكم عن بعد"]].concat(Object.entries(FSEC).map(([k,v])=>[k,v.ic+" "+v.l])).concat([["workers","👷 العمال"]]);
+  const NAV=[["sum","📊 ملخص"],["parcels","🗺️ القطع"],["map","🛰️ الخريطة"],["log","📋 السجل"],["well","🚰 البئر"],["remote","📡 التحكم عن بعد"]].concat(Object.entries(FSEC).map(([k,v])=>[k,v.ic+" "+v.l])).concat([["workers","👷 العمال"]]);
   const seg=`<div class="fnav" id="fnav">${NAV.map(([k,l])=>`<button class="chip ${UI.fv===k?"on":""}" data-fv="${k}">${l}</button>`).join("")}</div>`;
   if(UI.fv==="well") return farmHeader() + seg + renderWell();
+  if(UI.fv==="map") return farmHeader() + seg + renderMap();
   if(UI.fv==="remote") return farmHeader() + seg + renderRemote();
   if(FSEC[UI.fv]) return farmHeader() + seg + (UI.fitem && S.data.fitem[UI.fitem] ? renderFItem(UI.fitem) : renderFSec(UI.fv));
   const P=farmP(), L=farmL(), W=farmW(), t=todayKey(), yr=t.slice(0,4);
@@ -1288,7 +1373,7 @@ function renderFarm(){
     <div class="pills" style="margin:10px 0 2px"><span class="pill" data-fv="well" style="cursor:pointer">🚰 البئر: ${ws[2]}</span>${sheepN?`<span class="pill" data-fv="sheep" style="cursor:pointer">🐑 ${fmtN.format(sheepN)}</span>`:""}${poulN?`<span class="pill" data-fv="poultry" style="cursor:pointer">🐔 ${fmtN.format(poulN)}</span>`:""}</div>
     <div class="msum" style="margin-top:12px"><div class="stat out"><b style="font-size:16px">${fmtS(cost)}</b><span>تكاليف ${yr}</span></div><div class="stat"><b style="font-size:16px">${fmtS(inc)}</b><span>مداخيل ${yr}</span></div></div>
     ${planned.length?`<div class="sec-h"><h2>📌 أعمال مخطط لها</h2></div><div class="card" style="padding:4px 12px">${planned.slice(0,8).map(flogRow).join("")}</div>`:""}
-    ${owed.length?`<div class="sec-h"><h2>💵 مستحقات العمال</h2></div><div class="card" style="padding:4px 12px">${owed.map(({w,b})=>`<div class="logrow" data-wk="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><div class="meta">${b.days} يوم عمل</div></div><span class="c" style="color:var(--warn)">${money(b.owed,w.cur||"TND")}</span></div>`).join("")}</div>`:""}
+    ${owed.length?`<div class="sec-h"><h2>💵 مستحقات العمال</h2></div><div class="card" style="padding:4px 12px">${owed.map(({w,b})=>`<div class="logrow" data-wk="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><div class="meta">${ayam(b.days)} عمل</div></div><span class="c" style="color:var(--warn)">${money(b.owed,w.cur||"TND")}</span></div>`).join("")}</div>`:""}
     ${lastIrr.length?`<div class="sec-h"><h2>💧 آخر سقي</h2></div><div class="card" style="padding:4px 12px">${lastIrr.map(({p,d})=>`<div class="logrow"><span class="ic">💧</span><div class="t"><b>${esc(p.name)}</b><div class="meta">${p.crop?esc(p.crop):""}</div></div><span class="c" style="${d==null||d>7?"color:var(--warn)":""}">${d==null?"لم يُسجَّل":d===0?"اليوم":"قبل "+ayam(d)}</span></div>`).join("")}</div>`:""}
     <div class="sec-h"><h2>آخر الأعمال</h2><button class="btn ghost sm" data-fv="log">الكل</button></div>
     <div class="card" style="padding:4px 12px">${L.filter(l=>!isPlanned(l)).slice(0,6).map(flogRow).join("")||`<div class="empty">سجّل أعمال المزرعة: السقي، الغراسة، التسميد، الحصاد… مع التكلفة والعمال.</div>`}</div>
@@ -1309,8 +1394,9 @@ function renderFarm(){
   } else {
     body = W.length? W.map(w=>{ const b=wBalance(w.id); const R=farmWL(w.id).slice(0,5);
       return `<div class="card" style="${w.active==="no"?"opacity:.6":""}"><div class="vcard" data-edit-worker="${w.id}"><span class="ic">👷</span><div class="t"><b>${esc(w.name)}</b><span class="small muted">${esc([w.role, w.rate&&money(w.rate,w.cur||"TND")+" / يوم", w.phone].filter(Boolean).join(" · "))}</span></div></div>
-      <div class="pills"><span class="pill">📅 ${b.days} يوم</span><span class="pill">مستحق ${money(b.due,w.cur||"TND")}</span><span class="pill">مدفوع ${money(b.paid,w.cur||"TND")}</span><span class="pill ${b.owed>0?"warn":""}">الباقي ${money(b.owed,w.cur||"TND")}</span></div>
-      <div style="display:flex;gap:6px;margin-top:10px"><button class="btn ghost sm" data-wl-work="${w.id}">+ أيام عمل</button><button class="btn ghost sm" data-wl-pay="${w.id}">💵 دفعة</button></div>
+      <div class="pills"><span class="pill">📅 ${ayam(b.days)}</span><span class="pill">مستحق ${money(b.due,w.cur||"TND")}</span><span class="pill">مدفوع ${money(b.paid,w.cur||"TND")}</span><span class="pill ${b.owed>0?"warn":""}">الباقي ${money(b.owed,w.cur||"TND")}</span></div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button class="btn ghost sm" data-wl-work="${w.id}">+ أيام عمل</button><button class="btn ghost sm" data-wl-pay="${w.id}">💵 دفعة</button><button class="btn ghost sm" data-wtask-new="${w.id}">📌 مهمة</button></div>
+      ${(()=>{ const TK=farmL().filter(l=>l.worker===w.id&&l.done===false).sort((a,b)=>(a.date||"").localeCompare(b.date||"")); return TK.length?`<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px"><div style="display:flex;justify-content:space-between;align-items:center"><b class="small">📌 مهامه (${TK.length})</b><button class="btn ghost sm" data-wtask-copy="${w.id}">📋 نسخ لإرسالها</button></div>${TK.map(l=>`<div class="ck"><button class="chk" data-ftask-done="${l.id}"></button><span data-edit-flog="${l.id}" style="flex:1">${esc(l.title)}<span class="small muted"> · ${esc([l.date&&fmtShort.format(parseKey(l.date)), l.parcel&&l.parcel!=="all"&&pName(l.parcel)].filter(Boolean).join(" · "))}</span></span></div>`).join("")}</div>`:""; })()}
       ${R.length?`<div style="margin-top:6px">${R.map(x=>`<div class="logrow" data-edit-wl="${x.id}"><span class="ic">${x.kind==="pay"?"💵":"📅"}</span><div class="t"><b>${x.kind==="pay"?"دفعة":ayam(x.days||0)+(x.task?" — "+esc(x.task):"")}</b><div class="meta">${x.date?fmtShort.format(parseKey(x.date)):""}</div></div><span class="c" style="${x.kind==="pay"?"color:var(--acc)":""}">${money(x.amount||0,x.cur||"TND")}</span></div>`).join("")}</div>`:""}</div>`; }).join("")
       + `<div style="text-align:center"><button class="btn ghost sm" data-new-worker="1">+ عامل</button></div>`
       : `<div class="card empty">تابع أيام عمل كل عامل وأجره وما دفعته له وما بقي.<br><br><button class="btn" data-new-worker="1">+ عامل</button></div>`;
@@ -1422,7 +1508,7 @@ function renderToday(){
     <div class="stat"><b>${Object.keys(S.data.notes).length}</b><span>مذكرة</span></div>
   </div>
   ${(()=>{const lb=lastBackupDays(); const n=countItems(); return n>=5 && (lb==null||lb>=14)?`<div class="card" style="display:flex;align-items:center;gap:10px;border-color:var(--gold)"><span style="font-size:22px">💾</span><div style="flex:1" class="small">${lb==null?"لم تأخذ نسخة احتياطية بعد.":"آخر نسخة احتياطية قبل "+lb+" يوم."} بياناتك على هذا الهاتف فقط.</div><button class="btn sm" id="bkNow">نسخة الآن</button></div>`:"";})()}
-  ${(()=>{if(!modOn("farm")) return ""; const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" ${a.fitem?`data-fitem="${a.fitem}" data-fsec="${a.sec}"`:`data-edit-flog="${a.id}"`}><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
+  ${(()=>{if(!modOn("farm")) return ""; const al=farmAlerts(); return al.length?`<div class="sec-h"><h2>🌾 المزرعة</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" ${a.fitem?`data-fitem="${a.fitem}" data-fsec="${a.sec}"`:`data-edit-flog="${a.id}"`}><span class="ic">📌</span><div class="t"><b>${esc(a.txt)}</b><div class="meta">${a.low?"المخزون منخفض":a.d<0?"متأخر "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div></div></div>`).join("")}</div>`:"";})()}
   ${(()=>{if(!modOn("kids")) return ""; const al=kidAlerts(); return al.length?`<div class="sec-h"><h2>👨‍👩‍👧 الأطفال</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-kid="${a.kid}"><span class="ic">${a.ic}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null?`<div class="meta">${a.d<0?"فات منذ "+ayam(a.d):a.d===0?"اليوم":a.d===1?"غداً":"بعد "+ayam(a.d)}</div>`:a.med?`<div class="meta">دواء جارٍ</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${(()=>{if(!modOn("cars")) return ""; const al=vehAlerts(); return al.length?`<div class="sec-h"><h2>🚙 تنبيهات المركبات</h2></div><div class="card" style="padding:6px 12px">${al.map(a=>`<div class="logrow" data-veh="${a.vid}"><span class="ic">${a.issue?"⚠️":a.d!=null&&a.d<0?"🔴":"🟠"}</span><div class="t"><b>${esc(a.txt)}</b>${a.d!=null&&!a.issue?`<div class="meta">${a.d<0?"متأخر":a.d===0?"اليوم":"بعد "+ayam(a.d)}</div>`:""}</div></div>`).join("")}</div>`:"";})()}
   ${todayHol?holBanner(todayHol):""}
@@ -1656,6 +1742,12 @@ $("#app").addEventListener("click",e=>{
   if(b=g("[data-fitem]")){ UI.tab="farm"; if(b.dataset.fsec) UI.fv=b.dataset.fsec; UI.fitem=b.dataset.fitem; window.scrollTo(0,0); render(); return; }
   if(g("[data-fitem-back]")){ UI.fitem=null; render(); return; }
   if(g("#farmName")){ editFarmName(); return; }
+  if(b=g("[data-map-parcel]")){ editParcel(b.getAttribute("data-map-parcel")); return; }
+  if(b=g("[data-wtask-new]")){ editFlog(null,{worker:b.dataset.wtaskNew,done:false}); return; }
+  if(b=g("[data-ftask-done]")){ const id=b.dataset.ftaskDone, l=S.data.farml[id]; if(l){ put("farml",id,Object.assign({},l,{done:true})); toast("✓ تمّت المهمة"); } return; }
+  if(b=g("[data-wtask-copy]")){ const w=S.data.farmw[b.dataset.wtaskCopy]||{}; const TK=farmL().filter(l=>l.worker===b.dataset.wtaskCopy&&l.done===false).sort((a,c)=>(a.date||"").localeCompare(c.date||""));
+    const txt="مهام "+(w.name||"")+":\n"+TK.map((l,i)=>(i+1)+". "+l.title+(l.date?" — "+fmtShort.format(parseKey(l.date)):"")+(l.parcel&&l.parcel!=="all"?" ("+pName(l.parcel)+")":"")+(l.notes?"\n   "+l.notes:"")).join("\n");
+    (async()=>{ try{ await navigator.clipboard.writeText(txt); toast("نُسخت المهام، الصقها في واتساب"); }catch(e){ toast("تعذّر النسخ"); } })(); return; }
   if(b=g("[data-wv]")){ UI.wv=b.dataset.wv; render(); return; }
   if(b=g("[data-wday]")){ const d=addDays(parseKey(UI.wdate),+b.dataset.wday); if(keyOf(d)>todayKey()) return; UI.wdate=keyOf(d); render(); return; }
   if(b=g("[data-wc]")){ wChange(b.dataset.wc,b.dataset.wt,+b.dataset.wd); return; }
@@ -1731,6 +1823,7 @@ $("#app").addEventListener("click",e=>{
   if(g("#clearDone")){ confirmSheet("حذف كل المهام المنجزة؟",()=>tasks().filter(t=>t.done).forEach(t=>del("tasks",t.id))); return; }
 });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+document.addEventListener("change",e=>{ if(e.target && e.target.id==="mapImp" && e.target.files[0]) importMap(e.target.files[0]); });
 setInterval(()=>{ if(UI.tab==="today" && !$("#ov").classList.contains("show")) render(); }, 60000);
 
 /* ---------- app lock (PIN + fingerprint) ---------- */
